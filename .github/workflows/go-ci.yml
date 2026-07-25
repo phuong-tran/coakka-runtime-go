@@ -1,0 +1,50 @@
+name: go-ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: go test and package surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out module
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Check package metadata
+        run: |
+          test -f LICENSE
+          test -f NATIVE-LICENSE.md
+          test -f README.md
+          test -f CONSUMING.md
+
+      - name: Check native payload
+        run: |
+          native_count="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) | wc -l | tr -d ' ')"
+          test "${native_count}" = "5"
+
+          unexpected_aliases="$(find native -type f \( \
+            -name 'libcoakka_runtime_v2.so' -o \
+            -name 'libcoakka_runtime_v2.dylib' -o \
+            -name 'libcoakka_runtime_v2.dll' \
+          \) -print)"
+          test -z "${unexpected_aliases}"
+
+          unpinned="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) -print | grep -Ev '/libcoakka_runtime_v2-[0-9]+\.[0-9]+\.[0-9]+\+[^/]+\.(so|dylib|dll)$' || true)"
+          test -z "${unpinned}"

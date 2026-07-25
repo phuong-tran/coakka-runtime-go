@@ -1,9 +1,16 @@
 # CoAkka Runtime Go Connector
 
+[![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
+[![Version](https://img.shields.io/badge/version-v1.3.6-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.6)
+[![Release](https://img.shields.io/badge/release-v1.3.6-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.6)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
+
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.5
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.6
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
@@ -24,10 +31,30 @@ turning every internal boundary into another hand-written HTTP endpoint.
 
 Use these public repositories to orient first:
 
-- `https://github.com/phuong-tran/coakka-runtime-go`
-- `https://github.com/phuong-tran/coakka-logger-go`
-- `https://github.com/phuong-tran/coakka-publish`
-- `https://github.com/phuong-tran/coakka-samples`
+| Repository | Use it for | Link |
+| --- | --- | --- |
+| `coakka-samples` | Runnable examples and code you can inspect first. | https://github.com/phuong-tran/coakka-samples |
+| `coakka-publish` | Released packages, native archives, manifests, checksums, compatibility matrix, and release notes. | https://github.com/phuong-tran/coakka-publish |
+| `coakka-runtime-go` | Public Go module source for this package. | https://github.com/phuong-tran/coakka-runtime-go |
+| `coakka-logger-go` | Public Go logger module source. | https://github.com/phuong-tran/coakka-logger-go |
+
+Run the matching sample:
+
+```sh
+git clone https://github.com/phuong-tran/coakka-samples.git
+cd coakka-samples
+bash run.sh runtime go basic
+```
+
+Try the module without cloning any CoAkka repo. The example uses the same
+customer command that often becomes fake backend HTTP in a growing app:
+
+```sh
+mkdir coakka-runtime-go-first-run
+cd coakka-runtime-go-first-run
+go mod init coakka-runtime-go-first-run
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.6
+```
 
 ## Quick Start
 
@@ -35,23 +62,62 @@ Use these public repositories to orient first:
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	coakka "github.com/phuong-tran/coakka-runtime-go"
 )
 
 func main() {
+	const target = "samples.customer.store.create"
+	store := map[string]map[string]any{}
+
 	runtimeHost, err := coakka.StartRuntimeHost(coakka.ConnectorStartSpec{
-		SystemName: "sample",
-		NodeID:     "sample-node",
-		Routes:     []coakka.RouteSpec{coakka.LocalRouteDefault("samples.echo")},
+		SystemName: "customer-app",
+		NodeID:     "customer-app-node-1",
+		Routes:     []coakka.RouteSpec{coakka.LocalRouteDefault(target)},
 	}, "")
 	if err != nil {
 		panic(err)
 	}
 	defer runtimeHost.Close()
 
-	_, _ = runtimeHost.AwaitNextMonitor(10 * time.Millisecond)
+	err = runtimeHost.RegisterHandler(target, func(request *coakka.Envelope) *coakka.Envelope {
+		var draft map[string]any
+		_ = json.Unmarshal(request.GetPayload(), &draft)
+		customer := map[string]any{
+			"id":        draft["id"],
+			"name":      draft["name"],
+			"createdBy": request.GetSource(),
+		}
+		store[customer["id"].(string)] = customer
+
+		reply, _ := coakka.MakeJSONReplyFromRequestIdentity(request, target, map[string]any{
+			"status":      "created",
+			"customer":    customer,
+			"storedCount": len(store),
+		})
+		return reply
+	}, true)
+	if err != nil {
+		panic(err)
+	}
+
+	response, err := runtimeHost.AskJSON(
+		"customer-api",
+		target,
+		map[string]any{"id": "cust-001", "name": "Ada Lovelace"},
+		coakka.NewPayloadIdentity("samples.customer.create.request.v1", 1, coakka.PayloadFormatJSON),
+		2*time.Second,
+		"create_customer",
+		coakka.DeliveryHintRouterDefault,
+		nil,
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(response)
 }
 ```
 
@@ -95,7 +161,7 @@ bash scripts/package-release.sh
 Archive được ghi ra:
 
 ```text
-go/coakka-v2-connector-go-1.3.5.tar.gz
+go/coakka-v2-connector-go-1.3.6.tar.gz
 ```
 
 Public Go module export:
@@ -128,74 +194,65 @@ Public surface chính:
 
 ## Before / After
 
-Truoc do, local consumer phai nhin thay ten orchestration noi bo truoc:
+Before, the browser/API edge can be real HTTP, but teams often add a second
+private backend HTTP endpoint only so work owned by the same app or team has
+an address:
 
 ```go
-startSpec := coakka.ConnectorStartSpec{
-	SystemName: "customer-local",
-	NodeID:     "customer-local-node",
-	Routes:     nil,
+func createCustomerBackendHTTP(w http.ResponseWriter, r *http.Request) {
+	var draft map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&draft)
+	customer := storeCreate(draft)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":   "created",
+		"customer": customer,
+	})
 }
-requestIdentity := coakka.NewPayloadIdentity(
-	"customer.create.request.v1",
-	1,
-	coakka.PayloadFormatJSON,
-)
 
-connector, err := coakka.StartConnectorOrchestrator(startSpec, "")
-if err != nil {
-	return err
+func createCustomerPublicAPI(w http.ResponseWriter, r *http.Request) {
+	reply, _ := http.Post(
+		"http://customer-store/backend/customers",
+		"application/json",
+		r.Body,
+	)
+	defer reply.Body.Close()
+	_, _ = io.Copy(w, reply.Body)
 }
-defer connector.Close()
-
-response, err := connector.AskJSON(
-	"customer-api",
-	"customer.create",
-	map[string]any{"name": "Ada"},
-	requestIdentity,
-	2*time.Second,
-	"create",
-	coakka.DeliveryHintRouterDefault,
-	nil,
-)
 ```
 
-Sau do, van la runtime single-process ay, nhung entrypoint doc dung theo vai tro
-application-owned host:
+After, the public API can stay HTTP, but the fake backend URL becomes a CoAkka
+target:
 
 ```go
-startSpec := coakka.ConnectorStartSpec{
-	SystemName: "customer-local",
-	NodeID:     "customer-local-node",
-	Routes:     nil,
-}
-requestIdentity := coakka.NewPayloadIdentity(
-	"customer.create.request.v1",
-	1,
-	coakka.PayloadFormatJSON,
-)
+func createCustomerPublicAPI(w http.ResponseWriter, r *http.Request) {
+	var draft map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&draft)
 
-runtime, err := coakka.StartRuntimeHost(startSpec, "")
-if err != nil {
-	return err
-}
-defer runtime.Close()
-
-response, err := runtime.AskJSON(
+	response, err := runtimeHost.AskJSON(
 	"customer-api",
-	"customer.create",
-	map[string]any{"name": "Ada"},
-	requestIdentity,
-	2*time.Second,
-	"create",
+	"samples.customer.store.create",
+	draft,
+	coakka.NewPayloadIdentity("samples.customer.create.request.v1", 1, coakka.PayloadFormatJSON),
+	5*time.Second,
+	"create_customer",
 	coakka.DeliveryHintRouterDefault,
 	nil,
-)
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusGatewayTimeout)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(response)
+}
 ```
 
-`StartConnectorOrchestrator` van giu cho code cu. Code local-first moi nen dung
-`StartRuntimeHost` de nguoi doc thay ngay day la mot runtime host embedded trong
-process hien tai, chua phai remote/Kubernetes setup.
+The change is not "replace HTTP." HTTP still belongs at real browser/API or
+legacy edges. CoAkka removes backend HTTP that exists only to call capabilities
+owned by the same app or team by URL.
+
+`StartConnectorOrchestrator` remains available for existing code. New examples
+prefer `StartRuntimeHost` so the first screen reads as one embedded runtime
+owner, not a remote connector setup.
 
 Native runtime resolution order:
 
@@ -204,12 +261,14 @@ Native runtime resolution order:
 - packaged native under `native/<platform>/`
 - local fallback under `lib/`
 
-Request/reply lane trong Go hiện có hai host API shape trên cùng runtime contract:
+Request/reply lane in Go has two host API shapes over the same runtime contract:
 
-- `Ask...`: submit rồi chờ inline
-- `SubmitRequest...` + `TerminalEvents(...)`: submit trước, bắt terminal outcome (`response` hoặc `deadletter`) sau qua channel
+- `Ask...`: submit and wait inline
+- `SubmitRequest...` + `TerminalEvents(...)`: submit now, consume terminal
+  outcome (`response` or `deadletter`) later through a channel
 
-`TerminalEvents(...)` là connector-owned API shape, không phải transport mode riêng.
+`TerminalEvents(...)` is a connector-owned API shape, not a separate transport
+mode.
 
 Hot-path reading note:
 
