@@ -4,7 +4,7 @@ The current Go runtime package is a public Go module plus embedded native
 runtime libraries:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.4
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.5
 ```
 
 Example consumer `go.mod`:
@@ -14,7 +14,7 @@ module my-runtime-consumer
 
 go 1.23.0
 
-require github.com/phuong-tran/coakka-runtime-go v1.3.4
+require github.com/phuong-tran/coakka-runtime-go v1.3.5
 ```
 
 Example:

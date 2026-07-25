@@ -3,11 +3,17 @@
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.4
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.5
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
 runtime generation `1.3.2+caff6d6d` for macOS, Linux, and Windows.
+
+## License
+
+The Go connector source is Apache-2.0 licensed. The bundled native runtime
+libraries under `native/` use the CoAkka Public Artifact Preview terms in
+`NATIVE-LICENSE.md`.
 
 ## New To CoAkka
 
@@ -89,7 +95,7 @@ bash scripts/package-release.sh
 Archive được ghi ra:
 
 ```text
-go/coakka-v2-connector-go-1.3.4.tar.gz
+go/coakka-v2-connector-go-1.3.5.tar.gz
 ```
 
 Public Go module export:
