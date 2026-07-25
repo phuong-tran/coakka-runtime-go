@@ -1,11 +1,11 @@
 # Consuming The Go Runtime Package
 
-The current Go runtime artifact is a source package plus embedded native
-runtime libraries. The module path is already fixed as
-`github.com/phuong-tran/coakka-runtime-go`, but the public Go module repository
-must exist and be tagged before users can install it with `go get`.
+The current Go runtime package is a public Go module plus embedded native
+runtime libraries:
 
-Until that repository is opened, extract the archive and use a local `replace`.
+```sh
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.2
+```
 
 Example consumer `go.mod`:
 
@@ -14,9 +14,7 @@ module my-runtime-consumer
 
 go 1.23.0
 
-require github.com/phuong-tran/coakka-runtime-go v0.0.0
-
-replace github.com/phuong-tran/coakka-runtime-go => ./coakka-v2-connector-go-1.3.2
+require github.com/phuong-tran/coakka-runtime-go v1.3.2
 ```
 
 Example:
@@ -72,9 +70,6 @@ identity := connector.NewTextPayloadIdentity("demo.echo.request.v1")
 `PayloadFormatPlainText` remains as a compatibility alias; new user-facing code
 should use `PayloadFormatText`.
 
-After the public module repository is opened and tagged, the local `replace`
-line goes away and consumers should use:
+Repository:
 
-```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.2
-```
+- `https://github.com/phuong-tran/coakka-runtime-go`

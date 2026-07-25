@@ -1,6 +1,59 @@
-# Go Connector
+# CoAkka Runtime Go Connector
 
-Package Go runtime connector nằm trong thư mục `go/`.
+Go module:
+
+```sh
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.2
+```
+
+This package is the Go connector for CoAkka runtime v2. It embeds native
+runtime generation `1.3.2+caff6d6d` for macOS, Linux, and Windows.
+
+## New To CoAkka
+
+CoAkka is a native-backed runtime and logger toolkit for application-owned
+work. It helps an app route work by target name, handle request/reply,
+deadletters, bounded queues, diagnostics, and native-backed logging without
+turning every internal boundary into another hand-written HTTP endpoint.
+
+Use these public repositories to orient first:
+
+- `https://github.com/phuong-tran/coakka-runtime-go`
+- `https://github.com/phuong-tran/coakka-logger-go`
+- `https://github.com/phuong-tran/coakka-publish`
+- `https://github.com/phuong-tran/coakka-samples`
+
+## Quick Start
+
+```go
+package main
+
+import (
+	"time"
+
+	coakka "github.com/phuong-tran/coakka-runtime-go"
+)
+
+func main() {
+	runtimeHost, err := coakka.StartRuntimeHost(coakka.ConnectorStartSpec{
+		SystemName: "sample",
+		NodeID:     "sample-node",
+		Routes:     []coakka.RouteSpec{coakka.LocalRouteDefault("samples.echo")},
+	}, "")
+	if err != nil {
+		panic(err)
+	}
+	defer runtimeHost.Close()
+
+	_, _ = runtimeHost.AwaitNextMonitor(10 * time.Millisecond)
+}
+```
+
+One process owns one active runtime host. Start the host, register handlers for
+targets this process owns, send typed requests to target names, then close the
+host during application shutdown.
+
+## Development
 
 Verify nhanh:
 
@@ -46,10 +99,8 @@ cd go
 bash scripts/export-module-repo.sh /tmp/coakka-runtime-go-module
 ```
 
-The exported directory is the root of module
-`github.com/phuong-tran/coakka-runtime-go`. After that public repository exists
-and is tagged as `v1.3.2`, consumers can use `go get` without a local
-`replace`.
+The exported directory is the root of public module
+`github.com/phuong-tran/coakka-runtime-go`.
 
 Public surface chính:
 
