@@ -39,11 +39,11 @@ func runtimeResourceFileNames(goos string) []string {
 	versionedBase := "libcoakka_runtime_v2-" + CoakkaV2NativePackageVersion
 	switch normalizeRuntimeOS(goos) {
 	case "macos":
-		return []string{versionedBase + ".dylib", "libcoakka_runtime_v2.dylib", "libcoakka_runtime_v2.so"}
+		return []string{versionedBase + ".dylib"}
 	case "linux":
-		return []string{versionedBase + ".so", "libcoakka_runtime_v2.so"}
+		return []string{versionedBase + ".so"}
 	case "windows":
-		return []string{versionedBase + ".dll", "libcoakka_runtime_v2.dll"}
+		return []string{versionedBase + ".dll"}
 	default:
 		panic("unsupported platform")
 	}
