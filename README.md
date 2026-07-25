@@ -3,7 +3,7 @@
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.2
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.3
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
@@ -89,7 +89,7 @@ bash scripts/package-release.sh
 Archive được ghi ra:
 
 ```text
-go/coakka-v2-connector-go-1.3.2.tar.gz
+go/coakka-v2-connector-go-1.3.3.tar.gz
 ```
 
 Public Go module export:
