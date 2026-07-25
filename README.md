@@ -2,15 +2,15 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.3.6-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.6)
-[![Release](https://img.shields.io/badge/release-v1.3.6-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.6)
+[![Version](https://img.shields.io/badge/version-v1.3.7-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.7)
+[![Release](https://img.shields.io/badge/release-v1.3.7-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.7)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.6
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.7
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
@@ -53,7 +53,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.6
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.7
 ```
 
 ## Quick Start
@@ -161,7 +161,7 @@ bash scripts/package-release.sh
 Archive được ghi ra:
 
 ```text
-go/coakka-v2-connector-go-1.3.6.tar.gz
+go/coakka-v2-connector-go-1.3.7.tar.gz
 ```
 
 Public Go module export:
@@ -272,14 +272,12 @@ mode.
 
 Hot-path reading note:
 
-- false-sharing hiện không phải mối lo hot-path cấp 1 ở layer Go này theo cùng
-  nghĩa như native C++ connector
-- cost center dễ đáng ngờ hơn hiện tại là:
-  - `cgo` boundary và native read/write calls
-  - protobuf marshal/unmarshal
-  - channel/subscriber churn quanh `TerminalEvents(...)`
-  - goroutine handoff topology
-- chỉ nên quay lại cacheline/padding style hardening nếu layer này sau đó
-  chuyển sang packed shared state, off-heap rings, hoặc layout nhạy cacheline hơn
+- False sharing is not the first-order hot-path concern in this Go layer in the
+  same way it can be for native runtime internals.
+- The more likely cost centers are the `cgo` boundary, native read/write calls,
+  protobuf marshal/unmarshal work, `TerminalEvents(...)` subscriber churn, and
+  goroutine handoff topology.
+- Cacheline or padding hardening should be revisited only if this layer later
+  owns packed shared state, off-heap rings, or other cacheline-sensitive layout.
 
 Cross-language demo web lives under `examples/` when that workspace is present.
