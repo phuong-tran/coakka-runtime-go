@@ -2,15 +2,15 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.3.7-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.7)
-[![Release](https://img.shields.io/badge/release-v1.3.7-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.7)
+[![Version](https://img.shields.io/badge/version-v1.3.8-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.8)
+[![Release](https://img.shields.io/badge/release-v1.3.8-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.8)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.7
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.8
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
@@ -53,7 +53,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.7
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.8
 ```
 
 ## Quick Start
@@ -127,14 +127,14 @@ host during application shutdown.
 
 ## Development
 
-Verify nhanh:
+Quick verification:
 
 ```bash
 cd go
 go test ./...
 ```
 
-Live runtime integration smoke có thể bật thêm:
+Optional live runtime integration smoke:
 
 ```bash
 export COAKKA_GO_INTEGRATION=1
@@ -142,9 +142,10 @@ cd go
 go test ./...
 ```
 
-Integration lane này chạy helper subprocess riêng để tránh va chạm `dlopen` trong `go test` binary trên macOS.
+This integration lane runs a helper subprocess to avoid `dlopen` collisions in
+the `go test` binary on macOS.
 
-Package smoke với embedded native runtime:
+Package smoke with the embedded native runtime:
 
 ```bash
 cd go
@@ -158,10 +159,10 @@ cd go
 bash scripts/package-release.sh
 ```
 
-Archive được ghi ra:
+The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-1.3.7.tar.gz
+go/coakka-v2-connector-go-1.3.8.tar.gz
 ```
 
 Public Go module export:
@@ -174,7 +175,7 @@ bash scripts/export-module-repo.sh /tmp/coakka-runtime-go-module
 The exported directory is the root of public module
 `github.com/phuong-tran/coakka-runtime-go`.
 
-Public surface chính:
+Main public surface:
 
 - `StartRuntimeHost(startSpec, runtimeLibPath)` as the preferred single-process
   lifecycle entrypoint

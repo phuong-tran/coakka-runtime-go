@@ -34,6 +34,10 @@ jobs:
           test -f README.md
           test -f CONSUMING.md
 
+      - name: Check public docs language
+        run: |
+          ! LC_ALL=C grep -n '[^ -~]' README.md CONSUMING.md doc.go packaging.go
+
       - name: Check native payload
         run: |
           native_count="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) | wc -l | tr -d ' ')"
