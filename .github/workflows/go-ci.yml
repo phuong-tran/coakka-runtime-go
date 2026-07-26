@@ -36,7 +36,18 @@ jobs:
 
       - name: Check public docs language
         run: |
-          ! LC_ALL=C grep -n '[^ -~]' README.md CONSUMING.md doc.go packaging.go
+          python3 - <<'PY'
+          from pathlib import Path
+
+          failed = False
+          for name in ("README.md", "CONSUMING.md", "doc.go", "packaging.go"):
+              text = Path(name).read_text(encoding="utf-8")
+              for line_no, line in enumerate(text.splitlines(), 1):
+                  if any(ord(ch) > 127 for ch in line):
+                      print(f"{name}:{line_no}: non-ASCII public doc text")
+                      failed = True
+          raise SystemExit(1 if failed else 0)
+          PY
 
       - name: Check native payload
         run: |
