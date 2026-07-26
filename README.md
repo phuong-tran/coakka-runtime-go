@@ -2,15 +2,15 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.3.8-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.8)
-[![Release](https://img.shields.io/badge/release-v1.3.8-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.8)
+[![Version](https://img.shields.io/badge/version-v1.3.9-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.9)
+[![Release](https://img.shields.io/badge/release-v1.3.9-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.9)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.8
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.9
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
@@ -53,7 +53,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.8
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.9
 ```
 
 ## Quick Start
@@ -162,7 +162,7 @@ bash scripts/package-release.sh
 The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-1.3.8.tar.gz
+go/coakka-v2-connector-go-1.3.9.tar.gz
 ```
 
 Public Go module export:
