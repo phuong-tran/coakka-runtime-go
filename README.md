@@ -46,6 +46,11 @@ cd coakka-samples
 bash run.sh runtime go basic
 ```
 
+Read the deeper package docs:
+
+- [Why CoAkka Runtime matters](docs/coakka-runtime.md)
+- [CoAkka ecosystem map](docs/coakka-ecosystem.md)
+
 Try the module without cloning any CoAkka repo. The example uses the same
 customer command that often becomes fake backend HTTP in a growing app:
 
