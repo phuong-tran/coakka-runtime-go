@@ -16,6 +16,15 @@ go get github.com/phuong-tran/coakka-runtime-go@v1.3.10
 This package is the Go connector for CoAkka runtime v2. It embeds native
 runtime generation `1.3.2+caff6d6d` for macOS, Linux, and Windows.
 
+Public package links:
+
+| Link | Purpose |
+| --- | --- |
+| [pkg.go.dev/coakka-runtime-go](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go@v1.3.10) | Go API reference for the current module version. |
+| [GitHub Release v1.3.10](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.10) | Source module release with bundled native libraries. |
+| [Runtime sample](https://github.com/phuong-tran/coakka-samples/tree/main/runtime/go/basic) | Runnable request/reply sample. |
+| [Compatibility matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md) | Current native generation and package-manager status. |
+
 ## License
 
 The Go connector source is Apache-2.0 licensed. The bundled native runtime
