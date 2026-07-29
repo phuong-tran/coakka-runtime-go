@@ -144,50 +144,43 @@ host during application shutdown.
 Quick verification:
 
 ```bash
-cd go
 go test ./...
 ```
 
-Optional live runtime integration smoke:
+This public module repository is already the exported Go module root. It does
+not contain the internal release-packaging scripts used by the central CoAkka
+release workspace.
 
-```bash
-export COAKKA_GO_INTEGRATION=1
-cd go
-go test ./...
-```
-
-This integration lane runs a helper subprocess to avoid `dlopen` collisions in
-the `go test` binary on macOS.
-
-Package smoke with the embedded native runtime:
-
-```bash
-cd go
-bash scripts/smoke-packaged-package.sh
-```
-
-Package release tarball:
-
-```bash
-cd go
-bash scripts/package-release.sh
-```
-
-The archive is written to:
+The embedded native runtime libraries live under:
 
 ```text
-go/coakka-v2-connector-go-1.3.10.tar.gz
+native/<platform>/libcoakka_runtime_v2-<native-package-version>.<suffix>
 ```
 
-Public Go module export:
+To verify the module as a consumer, create a clean module and install the
+released tag:
 
 ```bash
-cd go
-bash scripts/export-module-repo.sh /tmp/coakka-runtime-go-module
+mkdir coakka-runtime-go-consumer
+cd coakka-runtime-go-consumer
+go mod init coakka-runtime-go-consumer
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.10
 ```
 
-The exported directory is the root of public module
-`github.com/phuong-tran/coakka-runtime-go`.
+Run the official sample for an end-to-end package check:
+
+```bash
+git clone https://github.com/phuong-tran/coakka-samples.git
+cd coakka-samples
+bash run.sh runtime go basic
+```
+
+Release packaging, native staging, checksum capture, and module export are
+owned by the central release pipeline and the public artifact surface:
+
+- `coakkaCoreNativeDev`
+- `coakka-publish`
+- `coakka-samples`
 
 Main public surface:
 
