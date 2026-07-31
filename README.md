@@ -2,26 +2,26 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.3.10-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.10)
-[![Release](https://img.shields.io/badge/release-v1.3.10-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.10)
+[![Version](https://img.shields.io/badge/version-v1.3.11-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.11)
+[![Release](https://img.shields.io/badge/release-v1.3.11-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.11)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.10
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.11
 ```
 
 This package is the Go connector for CoAkka runtime v2. It embeds native
-runtime generation `1.3.2+caff6d6d` for macOS, Linux, and Windows.
+runtime generation `1.3.3+282f3ad` for macOS, Linux, and Windows.
 
 Public package links:
 
 | Link | Purpose |
 | --- | --- |
-| [pkg.go.dev/coakka-runtime-go](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go@v1.3.10) | Go API reference for the current module version. |
-| [GitHub Release v1.3.10](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.10) | Source module release with bundled native libraries. |
+| [pkg.go.dev/coakka-runtime-go](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go@v1.3.11) | Go API reference for the current module version. |
+| [GitHub Release v1.3.11](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.11) | Source module release with bundled native libraries. |
 | [Runtime sample](https://github.com/phuong-tran/coakka-samples/tree/main/runtime/go/basic) | Runnable request/reply sample. |
 | [Compatibility matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md) | Current native generation and package-manager status. |
 
@@ -67,7 +67,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.10
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.11
 ```
 
 ## Quick Start
@@ -164,7 +164,7 @@ released tag:
 mkdir coakka-runtime-go-consumer
 cd coakka-runtime-go-consumer
 go mod init coakka-runtime-go-consumer
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.10
+go get github.com/phuong-tran/coakka-runtime-go@v1.3.11
 ```
 
 Run the official sample for an end-to-end package check:
