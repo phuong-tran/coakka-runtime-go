@@ -1,8 +1,16 @@
-// Package coakka_v2_connector is the Go connector for CoAkka runtime v2.
+// Package coakka_v2_connector is the Go connector for CoAkka Runtime v2.
+//
+// CoAkka is a polyglot, multi-language, multi-platform runtime ecosystem, not
+// a Go-only runtime. This module adapts Go applications to the same native
+// core, public C ABI, target, request/reply, bounded-admission, and deadletter
+// contract used by the JVM, Node.js, Python, C#, Rust, Swift, and other
+// connector lanes. Kubernetes is supported but not required; the same runtime
+// contract applies to standalone hosts, containers, VMs, bare metal, and
+// architecture-matched edge deployments.
 //
 // Install the public module with:
 //
-//	go get github.com/phuong-tran/coakka-runtime-go@v1.3.12
+//	go get github.com/phuong-tran/coakka-runtime-go@v1.4.0
 //
 // CoAkka is a native-backed runtime and logger toolkit for application-owned
 // work. It lets an app route work by target name, handle request/reply,

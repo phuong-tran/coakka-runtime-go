@@ -12,7 +12,7 @@ import (
 	"time"
 
 	coakkav2 "github.com/phuong-tran/coakka-runtime-go/coakka/v2"
-	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/proto"
 )
 
 type DeadletterError struct {
@@ -104,9 +104,12 @@ type GoRuntimeClient struct {
 	deadletterSubscribers      map[uint64]chan ObservedDeadletter
 	nextDeadletterSubscriberID uint64
 
-	submitMu sync.Mutex
-	statsMu  sync.Mutex
-	stats    RuntimeClientStats
+	submitMu                sync.Mutex
+	statsMu                 sync.Mutex
+	stats                   RuntimeClientStats
+	transportMu             sync.Mutex
+	startupConnectionResult *RuntimeTCPConnectionApplyResult
+	startupSecurityResult   *RuntimeTCPSecurityApplyResult
 
 	monitorSignalCh chan uint64
 	closedCh        chan struct{}
@@ -143,6 +146,34 @@ func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRunti
 		deadletterSubscribers:            make(map[uint64]chan ObservedDeadletter),
 		monitorSignalCh:                  make(chan uint64, 64),
 		closedCh:                         make(chan struct{}),
+	}
+	if config.ConnectionStrategy != nil {
+		result, applyErr := bindings.applyTCPConnectionStrategy(runtime, *config.ConnectionStrategy)
+		if applyErr != nil {
+			bindings.destroyRuntime(runtime)
+			bindings.close()
+			return nil, applyErr
+		}
+		client.startupConnectionResult = &result
+		if !result.Applied() {
+			bindings.destroyRuntime(runtime)
+			bindings.close()
+			return nil, &RuntimeTCPConnectionApplyError{Result: result}
+		}
+	}
+	if config.Security != nil {
+		result, applyErr := bindings.applyTCPSecurity(runtime, *config.Security)
+		if applyErr != nil {
+			bindings.destroyRuntime(runtime)
+			bindings.close()
+			return nil, applyErr
+		}
+		client.startupSecurityResult = &result
+		if !result.Applied() {
+			bindings.destroyRuntime(runtime)
+			bindings.close()
+			return nil, &RuntimeTCPSecurityApplyError{Result: result}
+		}
 	}
 	hostHandles, err := bindings.getHostHandles(runtime, client.hostHandleFlags())
 	if err != nil {
@@ -661,8 +692,10 @@ func (c *GoRuntimeClient) Close() error {
 		}
 		c.deadletterSubscribersMu.Unlock()
 		c.wg.Wait()
+		c.transportMu.Lock()
 		closeErr = c.bindings.stopRuntime(c.runtime)
 		c.cleanupNative()
+		c.transportMu.Unlock()
 	})
 	return closeErr
 }
@@ -860,7 +893,7 @@ func (c *GoRuntimeClient) startEnvelopeReader(fd int, lane string, onFrame func(
 				continue
 			}
 			for {
-				n, readErr := unix.Read(fd, chunk)
+				n, readErr := nativeReadFD(fd, chunk)
 				if n > 0 {
 					buffer = append(buffer, chunk[:n]...)
 					for {
@@ -888,7 +921,7 @@ func (c *GoRuntimeClient) startEnvelopeReader(fd int, lane string, onFrame func(
 				if isRetryableReadError(readErr) {
 					break
 				}
-				if readErr == unix.EBADF || readErr == unix.EINVAL {
+				if isTerminalReadError(readErr) {
 					return
 				}
 				if !c.isClosed() {
@@ -1118,37 +1151,6 @@ func (c *GoRuntimeClient) isClosed() bool {
 	}
 }
 
-func waitReadable(fd int, timeout time.Duration) (bool, error) {
-	pollFDs := []unix.PollFd{{
-		Fd:     int32(fd),
-		Events: unix.POLLIN,
-	}}
-	n, err := unix.Poll(pollFDs, int(timeout/time.Millisecond))
-	if err != nil {
-		if err == unix.EINTR {
-			return false, nil
-		}
-		return false, err
-	}
-	if n == 0 {
-		return false, nil
-	}
-	if pollFDs[0].Revents&(unix.POLLERR|unix.POLLNVAL) != 0 {
-		return false, fmt.Errorf("poll revents=%d", pollFDs[0].Revents)
-	}
-	return pollFDs[0].Revents&(unix.POLLIN|unix.POLLHUP) != 0, nil
-}
-
-func isRetryableReadError(err error) bool {
-	return err == unix.EAGAIN || err == unix.EWOULDBLOCK || err == unix.EINTR
-}
-
-func safeCloseFD(fd int) {
-	if fd >= 0 {
-		_ = unix.Close(fd)
-	}
-}
-
 func (c *GoRuntimeClient) trackRequest(request *Envelope, caller string) (*Envelope, trackedRequest, error) {
 	if request.GetKind() != coakkav2.MessageKind_MESSAGE_KIND_REQUEST {
 		return nil, trackedRequest{}, fmt.Errorf("%s requires MESSAGE_KIND_REQUEST", caller)
@@ -1268,13 +1270,5 @@ func protoCloneEnvelope(envelope *Envelope) *Envelope {
 	if envelope == nil {
 		return nil
 	}
-	out := *envelope
-	out.Payload = append([]byte(nil), envelope.GetPayload()...)
-	if envelope.Headers != nil {
-		out.Headers = make(map[string]string, len(envelope.Headers))
-		for key, value := range envelope.Headers {
-			out.Headers[key] = value
-		}
-	}
-	return &out
+	return proto.Clone(envelope).(*Envelope)
 }

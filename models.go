@@ -195,6 +195,8 @@ type ConnectorConfig struct {
 	SeparateDeliveredRequestLane bool
 	Generation                   uint64
 	OverloadPolicy               *RuntimeOverloadPolicy
+	ConnectionStrategy           *RuntimeTCPConnectionStrategySpec
+	Security                     *RuntimeTCPSecuritySpec
 }
 
 func (c ConnectorConfig) RequireValid() error {
@@ -237,6 +239,8 @@ type ConnectorStartSpec struct {
 	DisableSeparateDeliveredRequestLane bool
 	Generation                          uint64
 	OverloadPolicy                      *RuntimeOverloadPolicy
+	ConnectionStrategy                  *RuntimeTCPConnectionStrategySpec
+	Security                            *RuntimeTCPSecuritySpec
 }
 
 func (s ConnectorStartSpec) ToConnectorConfig() ConnectorConfig {
@@ -251,6 +255,8 @@ func (s ConnectorStartSpec) ToConnectorConfig() ConnectorConfig {
 		SeparateDeliveredRequestLane: normalized.SeparateDeliveredRequestLane,
 		Generation:                   normalized.Generation,
 		OverloadPolicy:               normalized.OverloadPolicy,
+		ConnectionStrategy:           normalized.ConnectionStrategy,
+		Security:                     normalized.Security,
 	}
 }
 

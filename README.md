@@ -6,34 +6,41 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.3.12-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.12)
-[![Release](https://img.shields.io/badge/release-v1.3.12-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.12)
+[![Version](https://img.shields.io/badge/version-v1.4.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.4.0)
+[![Release](https://img.shields.io/badge/release-v1.4.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.4.0)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
 **This is the Go connector in the polyglot, multi-language, multi-platform
-CoAkka Runtime ecosystem.** CoAkka is not a Go-only runtime; this module uses
-the same native core and public runtime contract as the JVM, JavaScript,
-Python, C#, Rust, Swift, and other connector lanes.
+CoAkka Runtime ecosystem.** CoAkka is not a Go-only runtime: this module
+adapts Go applications to the same native core, public C ABI, target,
+request/reply, bounded-admission, and deadletter contract used by the JVM,
+Node.js, Python, C#, Rust, Swift, and other connector lanes.
+
+Kubernetes is supported but not required. Use the public
+[Ecosystem Overview](https://github.com/phuong-tran/coakka-publish/blob/main/docs/ecosystem-overview.md)
+and [Compatibility Matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md)
+to select an exact module and native OS/CPU payload.
+Start with the [CoAkka Documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md)
+for concepts, integration paths, operations, and runnable samples.
 
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.12
+go get github.com/phuong-tran/coakka-runtime-go@v1.4.0
 ```
 
-This package is the Go connector for CoAkka runtime v2. It embeds native
-runtime generation `1.3.4+dc6ec284` for macOS, Linux, and Windows.
+Published version `v1.4.0` embeds native runtime generation
+`1.4.0+2cee86bf`. Every release records its native generation separately so a
+Go module version is never mistaken for the runtime version.
 
-Public package links:
+Common guidance:
 
-| Link | Purpose |
-| --- | --- |
-| [pkg.go.dev/coakka-runtime-go](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go@v1.3.12) | Go API reference for the current module version. |
-| [GitHub Release v1.3.12](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.12) | Source module release with bundled native libraries. |
-| [Runtime sample](https://github.com/phuong-tran/coakka-samples/tree/main/runtime/go/basic) | Runnable request/reply sample. |
-| [CoAkka documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md) | Concepts, integration paths, operations, and troubleshooting. |
-| [Compatibility matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md) | Current native generation and package-manager status. |
+- [Connection strategies](https://github.com/phuong-tran/coakka-publish/blob/main/docs/connection-strategies.md)
+- [TLS and mTLS](https://github.com/phuong-tran/coakka-publish/blob/main/docs/tls-and-mtls.md)
+- [Troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
+- [Contact and support](https://github.com/phuong-tran/coakka-publish/blob/main/docs/contact-and-support.md): `gabrielgun1983@gmail.com`
+- [Go transport API](TRANSPORT_CONFIGURATION.md)
 
 ## License
 
@@ -65,11 +72,6 @@ cd coakka-samples
 bash run.sh runtime go basic
 ```
 
-Read the deeper package docs:
-
-- [Why CoAkka Runtime matters](docs/coakka-runtime.md)
-- [CoAkka ecosystem map](docs/coakka-ecosystem.md)
-
 Try the module without cloning any CoAkka repo. The example uses the same
 customer command that often becomes fake backend HTTP in a growing app:
 
@@ -77,7 +79,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.12
+go get github.com/phuong-tran/coakka-runtime-go@v1.4.0
 ```
 
 ## Quick Start
@@ -154,43 +156,50 @@ host during application shutdown.
 Quick verification:
 
 ```bash
+cd go
 go test ./...
 ```
 
-This public module repository is already the exported Go module root. It does
-not contain the internal release-packaging scripts used by the central CoAkka
-release workspace.
+Optional live runtime integration smoke:
 
-The embedded native runtime libraries live under:
+```bash
+export COAKKA_GO_INTEGRATION=1
+cd go
+go test ./...
+```
+
+This integration lane runs a helper subprocess to avoid `dlopen` collisions in
+the `go test` binary on macOS.
+
+Package smoke with the embedded native runtime:
+
+```bash
+cd go
+bash scripts/smoke-packaged-package.sh
+```
+
+Package release tarball:
+
+```bash
+cd go
+bash scripts/package-release.sh
+```
+
+The archive is written to:
 
 ```text
-native/<platform>/libcoakka_runtime_v2-<native-package-version>.<suffix>
+go/coakka-v2-connector-go-1.4.0.tar.gz
 ```
 
-To verify the module as a consumer, create a clean module and install the
-released tag:
+Public Go module export:
 
 ```bash
-mkdir coakka-runtime-go-consumer
-cd coakka-runtime-go-consumer
-go mod init coakka-runtime-go-consumer
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.12
+cd go
+bash scripts/export-module-repo.sh /tmp/coakka-runtime-go-module
 ```
 
-Run the official sample for an end-to-end package check:
-
-```bash
-git clone https://github.com/phuong-tran/coakka-samples.git
-cd coakka-samples
-bash run.sh runtime go basic
-```
-
-Release packaging, native staging, checksum capture, and module export are
-owned by the central release pipeline and the public artifact surface:
-
-- `coakkaCoreNativeDev`
-- `coakka-publish`
-- `coakka-samples`
+The exported directory is the root of public module
+`github.com/phuong-tran/coakka-runtime-go`.
 
 Main public surface:
 
@@ -206,6 +215,10 @@ Main public surface:
 - `MakeJSONReplyFromRequestIdentity(...)`
 - `RuntimeControlClient`
 - `RuntimeMonitor`
+- capability discovery, startup-configured connection/security policy, and
+  structured atomic apply results
+- same-mode TLS/mTLS credential generation reload with failed-reload state
+  preservation
 - delivered-request lane enabled by default for request/reply hosts; set
   `DisableSeparateDeliveredRequestLane: true` only for advanced, measured,
   mostly one-way hosts
@@ -278,6 +291,16 @@ Native runtime resolution order:
 - `$COAKKA_RUNTIME_LIB`
 - packaged native under `native/<platform>/`
 - local fallback under `lib/`
+
+The package includes target-specific native libraries for macOS ARM64, Linux
+ARM64, and Windows x86-64. Exact runtime execution and package smoke
+pass on macOS ARM64, and all three native digests match the release metadata.
+The same Go cgo source cross-compiles to Linux ARM64 ELF and Windows x86-64 PE;
+this package receipt makes no Go execution claim for those two targets. Payload
+presence and compilation do not claim execution. See
+[Troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
+for OS/CPU selection, dependencies, Gatekeeper, Authenticode, digests, and the
+currently absent publisher signing.
 
 Request/reply lane in Go has two host API shapes over the same runtime contract:
 

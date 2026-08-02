@@ -1,11 +1,15 @@
 # Consuming The Go Runtime Package
 
-The current Go runtime package is a public Go module plus embedded native
+This is the Go connector for the polyglot, multi-language, multi-platform
+CoAkka Runtime ecosystem. The public Go module includes the matching native
 runtime libraries:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.3.12
+go get github.com/phuong-tran/coakka-runtime-go@v1.4.0
 ```
+
+Every module release records its connector version and bundled native runtime
+generation separately.
 
 Example consumer `go.mod`:
 
@@ -14,7 +18,7 @@ module my-runtime-consumer
 
 go 1.23.0
 
-require github.com/phuong-tran/coakka-runtime-go v1.3.12
+require github.com/phuong-tran/coakka-runtime-go v1.4.0
 ```
 
 Example:
@@ -50,13 +54,19 @@ Library resolution order:
 - packaged native library under `native/<platform>/`
 - local fallback candidates under `lib/`
 
-Current packaged platforms:
+Package targets:
 
 - `macos-aarch64`
 - `linux-aarch64`
-- `linux-x86_64`
-- `windows-aarch64`
 - `windows-x86_64`
+
+All three native digests are verified during packaging. Current connector
+execution evidence covers macOS ARM64; this package receipt makes no Go
+execution claim for Linux or Windows. Read
+[Transport Configuration](TRANSPORT_CONFIGURATION.md) before selecting a
+non-default connection mode or TLS/mTLS, and use the canonical
+[troubleshooting guide](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
+for loader, architecture, certificate, and publisher-trust failures.
 
 One Go process may start one active runtime host. `StartConnectorOrchestrator`
 remains as the compatibility name for the same lifecycle owner.

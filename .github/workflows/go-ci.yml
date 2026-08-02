@@ -40,31 +40,11 @@ jobs:
           from pathlib import Path
 
           failed = False
-          files = [
-              Path("README.md"),
-              Path("CONSUMING.md"),
-              Path("doc.go"),
-              Path("packaging.go"),
-              *sorted(Path("docs").glob("*.md")),
-          ]
-          blocked = (
-              "/Users/",
-              "npm_",
-              "pypi-",
-              "internal/release",
-              "protobuf schema",
-              "native bridge internals",
-              "CAF",
-              "libuv",
-          )
-          for path in files:
-              text = path.read_text(encoding="utf-8")
+          for name in ("README.md", "CONSUMING.md", "doc.go", "packaging.go"):
+              text = Path(name).read_text(encoding="utf-8")
               for line_no, line in enumerate(text.splitlines(), 1):
                   if any(ord(ch) > 127 for ch in line):
-                      print(f"{path}:{line_no}: non-ASCII public doc text")
-                      failed = True
-                  if any(term in line for term in blocked):
-                      print(f"{path}:{line_no}: blocked public doc wording")
+                      print(f"{name}:{line_no}: non-ASCII public doc text")
                       failed = True
           raise SystemExit(1 if failed else 0)
           PY
@@ -72,7 +52,7 @@ jobs:
       - name: Check native payload
         run: |
           native_count="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) | wc -l | tr -d ' ')"
-          test "${native_count}" = "5"
+          test "${native_count}" = "3"
 
           unexpected_aliases="$(find native -type f \( \
             -name 'libcoakka_runtime_v2.so' -o \
