@@ -1,11 +1,20 @@
 # CoAkka Runtime Go Connector
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/phuong-tran/coakka-samples/main/docs/assets/brand/coakka-logo.png" alt="CoAkka" width="480">
+</p>
+
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
 [![Version](https://img.shields.io/badge/version-v1.3.12-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.3.12)
 [![Release](https://img.shields.io/badge/release-v1.3.12-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.12)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
+
+**This is the Go connector in the polyglot, multi-language, multi-platform
+CoAkka Runtime ecosystem.** CoAkka is not a Go-only runtime; this module uses
+the same native core and public runtime contract as the JVM, JavaScript,
+Python, C#, Rust, Swift, and other connector lanes.
 
 Go module:
 
@@ -23,12 +32,13 @@ Public package links:
 | [pkg.go.dev/coakka-runtime-go](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go@v1.3.12) | Go API reference for the current module version. |
 | [GitHub Release v1.3.12](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.3.12) | Source module release with bundled native libraries. |
 | [Runtime sample](https://github.com/phuong-tran/coakka-samples/tree/main/runtime/go/basic) | Runnable request/reply sample. |
+| [CoAkka documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md) | Concepts, integration paths, operations, and troubleshooting. |
 | [Compatibility matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md) | Current native generation and package-manager status. |
 
 ## License
 
 The Go connector source is Apache-2.0 licensed. The bundled native runtime
-libraries under `native/` use the CoAkka Public Artifact Preview terms in
+libraries under `native/` use the CoAkka Public Artifact terms in
 `NATIVE-LICENSE.md`.
 
 ## New To CoAkka

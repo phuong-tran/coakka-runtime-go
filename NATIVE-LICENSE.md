@@ -1,4 +1,4 @@
-# CoAkka Public Artifact Preview License 1.0
+# CoAkka Public Artifact License 1.0
 
 Effective: 2026-07-19
 
@@ -7,7 +7,7 @@ headers, native libraries, connector packages, Maven artifacts, checksums, and
 artifact metadata. It is not a source-build repository.
 
 Unless a specific release artifact includes different license terms, the
-artifacts in this repository are made available under the following preview
+artifacts in this repository are made available under the following artifact
 terms.
 
 This is not an OSI-approved open source license. The separate
@@ -82,7 +82,7 @@ marketplace offerings.
 
 ## Production Use
 
-These preview terms are intended for developer evaluation, sample execution,
+These artifact terms are intended for developer evaluation, sample execution,
 non-production proof-of-concept work, CI, and integration testing. Production
 use, hosted service use, customer distribution, and paid redistribution require
 explicit release terms or a separate written agreement.
@@ -104,7 +104,7 @@ artifacts.
 
 ## No Patent Or Trademark Grant
 
-These preview terms do not grant patent rights, trademark rights, or rights to
+These artifact terms do not grant patent rights, trademark rights, or rights to
 use the CoAkka name beyond the limited artifact and sample uses allowed above.
 Trademark use is governed by `TRADEMARKS.md`.
 
