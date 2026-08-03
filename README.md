@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.4.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.4.0)
-[![Release](https://img.shields.io/badge/release-v1.4.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.4.0)
+[![Version](https://img.shields.io/badge/version-v1.4.1-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.4.1)
+[![Release](https://img.shields.io/badge/release-v1.4.1-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.4.1)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
@@ -27,11 +27,11 @@ for concepts, integration paths, operations, and runnable samples.
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.4.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.4.1
 ```
 
-Published version `v1.4.0` embeds native runtime generation
-`1.4.0+2cee86bf`. Every release records its native generation separately so a
+Published version `v1.4.1` embeds native runtime generation
+`1.4.1+9e02a51d`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version.
 
 Common guidance:
@@ -79,7 +79,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.4.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.4.1
 ```
 
 ## Quick Start
@@ -188,7 +188,7 @@ bash scripts/package-release.sh
 The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-1.4.0.tar.gz
+go/coakka-v2-connector-go-1.4.1.tar.gz
 ```
 
 Public Go module export:
@@ -294,7 +294,7 @@ Native runtime resolution order:
 
 The package includes target-specific native libraries for macOS ARM64, Linux
 ARM64, and Windows x86-64. Exact runtime execution and package smoke
-pass on macOS ARM64, and all three native digests match the release metadata.
+pass on macOS ARM64, and all five native digests match the release metadata.
 The same Go cgo source cross-compiles to Linux ARM64 ELF and Windows x86-64 PE;
 this package receipt makes no Go execution claim for those two targets. Payload
 presence and compilation do not claim execution. See

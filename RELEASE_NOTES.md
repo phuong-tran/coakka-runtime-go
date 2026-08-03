@@ -1,6 +1,6 @@
 # Go Connector Release Notes
 
-## v1.4.0
+## v1.4.1
 
 This release adds runtime-v2 transport configuration while preserving the
 public C ABI semantics:
@@ -17,14 +17,14 @@ public C ABI semantics:
 - OS-specific C shims for dynamic loading and runtime fd wait/read/close
 
 macOS ARM64 source tests pass against the baseline capability profile and the
-exact full-capability runtime generation `1.4.0+2cee86bf`, including failed key
+exact full-capability runtime generation `1.4.1+9e02a51d`, including failed key
 mismatch preservation and successful generation reload. The same cgo source
 cross-compiles to Windows x86-64 PE and Linux ARM64 ELF. Those cross-builds are
 compile evidence only; this package receipt makes no connector or consumer
 execution claim for Linux or Windows.
 
 The module payload verifier passes with the exact release-metadata digests for
-macOS ARM64, Linux ARM64, and Windows x86-64, and its macOS
+macOS ARM64, Linux ARM64/x86-64, and Windows ARM64/x86-64, and its macOS
 consumer smoke passes. This does not claim Linux/Windows execution. Publisher
 signing is absent.
 
