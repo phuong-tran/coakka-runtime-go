@@ -21,6 +21,9 @@ Kubernetes is supported but not required. Use the public
 [Ecosystem Overview](https://github.com/phuong-tran/coakka-publish/blob/main/docs/ecosystem-overview.md)
 and [Compatibility Matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md)
 to select an exact module and native OS/CPU payload.
+The [package and platform evidence ledger](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-package-platform-evidence.md)
+separates payload presence, verification, matching-host execution, and known
+release limitations.
 Start with the [CoAkka Documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md)
 for concepts, integration paths, operations, and runnable samples.
 
@@ -33,6 +36,12 @@ go get github.com/phuong-tran/coakka-runtime-go@v1.4.1
 Published version `v1.4.1` embeds native runtime generation
 `1.4.1+9e02a51d`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version.
+
+The module contains macOS ARM64, Linux ARM64 and x86-64, and Windows ARM64 and
+x86-64 payloads. Exact `v1.4.1` request/reply execution passes on macOS ARM64
+and on Linux ARM64 and x86-64. Both Windows payloads pass package, format,
+export, dependency, and digest gates; a matching Go-on-Windows execution run is
+not recorded for this release.
 
 Common guidance:
 
@@ -293,11 +302,11 @@ Native runtime resolution order:
 - local fallback under `lib/`
 
 The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64, and Windows x86-64. Exact runtime execution and package smoke
-pass on macOS ARM64, and all five native digests match the release metadata.
-The same Go cgo source cross-compiles to Linux ARM64 ELF and Windows x86-64 PE;
-this package receipt makes no Go execution claim for those two targets. Payload
-presence and compilation do not claim execution. See
+ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.4.1`
+request/reply passes on macOS ARM64 and Linux ARM64/x86-64. All five native
+digests and binary formats match release metadata. Both Windows payloads pass
+package, export, dependency, and digest gates; matching Go-on-Windows execution
+is not recorded for this release. See
 [Troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
 for OS/CPU selection, dependencies, Gatekeeper, Authenticode, digests, and the
 currently absent publisher signing.

@@ -58,11 +58,15 @@ Package targets:
 
 - `macos-aarch64`
 - `linux-aarch64`
+- `linux-x86_64`
+- `windows-aarch64`
 - `windows-x86_64`
 
-All five native digests are verified during packaging. Current connector
-execution evidence covers macOS ARM64; this package receipt makes no Go
-execution claim for Linux or Windows. Read
+All five native digests and binary formats are verified during packaging.
+Exact module `v1.4.1` request/reply execution passes on macOS ARM64 and Linux
+ARM64 and x86-64. Both Windows payloads pass package, format, export,
+dependency, and digest gates; matching Go-on-Windows execution is not recorded
+for this release. Read
 [Transport Configuration](TRANSPORT_CONFIGURATION.md) before selecting a
 non-default connection mode or TLS/mTLS, and use the canonical
 [troubleshooting guide](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
