@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.5.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.5.0)
-[![Release](https://img.shields.io/badge/release-v1.5.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.5.0)
+[![Version](https://img.shields.io/badge/version-v1.5.1-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.5.1)
+[![Release](https://img.shields.io/badge/release-v1.5.1-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.5.1)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
@@ -27,10 +27,10 @@ for concepts, integration paths, operations, and runnable samples.
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.5.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.5.1
 ```
 
-Published module version `v1.5.0` embeds connector version `2.1.0` and native runtime generation
+Published module version `v1.5.1` embeds connector version `2.1.0` and native runtime generation
 `2.1.0+60ddf70d`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version. The module path
 does not use a `/v2` suffix, so the release remains on semantic major `v1`.
@@ -80,7 +80,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.5.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.5.1
 ```
 
 ## Quick Start
@@ -294,7 +294,7 @@ Native runtime resolution order:
 - local fallback under `lib/`
 
 The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.5.0`
+ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.5.1`
 request/reply passes on macOS ARM64 and Linux ARM64/x86-64. All five native
 digests and binary formats match release metadata. Both Windows payloads pass
 package, export, dependency, and digest gates; matching Go-on-Windows execution
@@ -328,4 +328,5 @@ Cross-language demo web lives under `examples/` when that workspace is present.
 
 `OpenFileLane(...)` exposes the independent native bulk-transfer lane with
 concurrent wait/cancel and draining `Close()`. See the shared
-[file-lane contract](https://github.com/phuong-tran/coakkaJVMConnector/blob/main/FILE_LANE.md) before packaging it with a native runtime.
+[file-lane contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-file-transfer.md)
+before packaging it with a native runtime.

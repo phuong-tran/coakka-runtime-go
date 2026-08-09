@@ -5,7 +5,7 @@ CoAkka Runtime ecosystem. The public Go module includes the matching native
 runtime libraries:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.5.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.5.1
 ```
 
 Every module release records its connector version and bundled native runtime
@@ -18,7 +18,7 @@ module my-runtime-consumer
 
 go 1.23.0
 
-require github.com/phuong-tran/coakka-runtime-go v1.5.0
+require github.com/phuong-tran/coakka-runtime-go v1.5.1
 ```
 
 Example:
@@ -63,7 +63,7 @@ Package targets:
 - `windows-x86_64`
 
 All five native digests and binary formats are verified during packaging.
-Exact module `v1.5.0` request/reply passes on macOS ARM64 and Linux
+Exact module `v1.5.1` request/reply passes on macOS ARM64 and Linux
 ARM64/x86-64. Both Windows payloads pass package, export, dependency, and
 digest gates; matching Go-on-Windows execution is not recorded. Read
 [Transport Configuration](TRANSPORT_CONFIGURATION.md) before selecting a
