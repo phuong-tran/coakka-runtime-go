@@ -20,6 +20,7 @@ package coakka_v2_connector
 #include <string.h>
 
 typedef struct coakka_v2_runtime_t coakka_v2_runtime_t;
+typedef struct coakka_v2_file_lane_t coakka_v2_file_lane_t;
 
 typedef struct {
   const char *system_name;
@@ -259,6 +260,91 @@ typedef struct {
   coakka_v2_tcp_security_info_t active_security;
 } coakka_v2_tcp_security_apply_result_t;
 
+typedef struct {
+  size_t struct_size;
+  uint32_t mode;
+  uint32_t reserved;
+  uint64_t credential_generation;
+  const char *credential_id;
+  const char *ca_certificate_file;
+  const char *identity_certificate_file;
+  const char *private_key_file;
+} coakka_v2_file_lane_security_config_t;
+
+typedef struct {
+  size_t struct_size;
+  uint32_t flags;
+  const char *bind_host;
+  uint16_t bind_port;
+  size_t queue_capacity;
+  uint64_t max_file_size;
+  uint32_t io_timeout_ms;
+  uint64_t checkpoint_bytes;
+  uint64_t progress_bytes;
+  uint32_t progress_interval_ms;
+  uint32_t sender_worker_count;
+  uint32_t receiver_worker_count;
+  const coakka_v2_file_lane_security_config_t *security;
+} coakka_v2_file_lane_config_t;
+
+typedef struct {
+  size_t struct_size;
+  const char *transfer_id;
+  const char *authorization_token;
+  const char *destination_path;
+  uint64_t expected_size;
+  uint8_t expected_sha256[32];
+} coakka_v2_file_receive_spec_t;
+
+typedef struct {
+  size_t struct_size;
+  const char *transfer_id;
+  const char *authorization_token;
+  const char *remote_host;
+  uint16_t remote_port;
+  const char *source_path;
+  uint64_t expected_size;
+  uint8_t expected_sha256[32];
+  uint32_t timeout_ms;
+} coakka_v2_file_send_spec_t;
+
+typedef struct {
+  size_t struct_size;
+  uint32_t direction;
+  uint32_t state;
+  uint32_t result;
+  uint64_t expected_size;
+  uint64_t transferred_bytes;
+  uint64_t committed_offset;
+  uint32_t progress_milli;
+  uint32_t cancel_requested;
+  uint64_t update_sequence;
+  uint64_t submitted_mono_ns;
+  uint64_t started_mono_ns;
+  uint64_t updated_mono_ns;
+  uint64_t terminal_mono_ns;
+  char detail[160];
+} coakka_v2_file_transfer_snapshot_t;
+
+typedef struct {
+  size_t struct_size;
+  size_t queue_capacity;
+  size_t queued_sends;
+  size_t prepared_receives;
+  size_t active_sends;
+  size_t active_receives;
+  size_t retained_records;
+  uint64_t submitted_sends;
+  uint64_t prepared_receive_count;
+  uint64_t completed_sends;
+  uint64_t completed_receives;
+  uint64_t failed_sends;
+  uint64_t failed_receives;
+  uint64_t canceled_transfers;
+  uint64_t completed_send_bytes;
+  uint64_t completed_receive_bytes;
+} coakka_v2_file_lane_stats_t;
+
 typedef uint32_t (*coakka_v2_runtime_get_abi_version_fn)(void);
 typedef int (*coakka_v2_runtime_get_info_fn)(coakka_v2_runtime_info_t *out_info);
 typedef int (*coakka_v2_runtime_get_config_fn)(coakka_v2_runtime_t *rt, coakka_v2_runtime_config_view_t *out_config);
@@ -278,6 +364,19 @@ typedef int (*coakka_v2_runtime_get_tcp_connection_config_fn)(coakka_v2_runtime_
 typedef int (*coakka_v2_runtime_apply_tcp_security_options_ex_fn)(coakka_v2_runtime_t *rt, const coakka_v2_tcp_security_options_t *options, coakka_v2_tcp_security_apply_result_t *out_result);
 typedef int (*coakka_v2_runtime_get_tcp_security_info_fn)(coakka_v2_runtime_t *rt, coakka_v2_tcp_security_info_t *out_info);
 typedef const char *(*coakka_v2_transport_apply_reason_name_fn)(uint32_t reason);
+typedef int (*coakka_v2_file_lane_create_ex_fn)(const coakka_v2_file_lane_config_t *, coakka_v2_file_lane_t **);
+typedef void (*coakka_v2_file_lane_destroy_fn)(coakka_v2_file_lane_t *);
+typedef int (*coakka_v2_file_lane_start_fn)(coakka_v2_file_lane_t *);
+typedef int (*coakka_v2_file_lane_stop_fn)(coakka_v2_file_lane_t *);
+typedef int (*coakka_v2_file_lane_get_bound_port_fn)(coakka_v2_file_lane_t *, uint16_t *);
+typedef int (*coakka_v2_file_lane_prepare_receive_fn)(coakka_v2_file_lane_t *, const coakka_v2_file_receive_spec_t *);
+typedef int (*coakka_v2_file_lane_submit_send_fn)(coakka_v2_file_lane_t *, const coakka_v2_file_send_spec_t *);
+typedef int (*coakka_v2_file_lane_get_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t, coakka_v2_file_transfer_snapshot_t *);
+typedef int (*coakka_v2_file_lane_wait_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_file_transfer_snapshot_t *);
+typedef int (*coakka_v2_file_lane_cancel_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t);
+typedef int (*coakka_v2_file_lane_forget_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t);
+typedef int (*coakka_v2_file_lane_get_stats_fn)(coakka_v2_file_lane_t *, coakka_v2_file_lane_stats_t *);
+typedef int (*coakka_v2_file_sha256_path_fn)(const char *, uint8_t[32], uint64_t *);
 
 typedef struct coakka_v2_go_bindings_t {
   void *handle;
@@ -300,6 +399,19 @@ typedef struct coakka_v2_go_bindings_t {
   coakka_v2_runtime_apply_tcp_security_options_ex_fn apply_tcp_security_options_ex;
   coakka_v2_runtime_get_tcp_security_info_fn get_tcp_security_info;
   coakka_v2_transport_apply_reason_name_fn transport_apply_reason_name;
+  coakka_v2_file_lane_create_ex_fn file_lane_create_ex;
+  coakka_v2_file_lane_destroy_fn file_lane_destroy;
+  coakka_v2_file_lane_start_fn file_lane_start;
+  coakka_v2_file_lane_stop_fn file_lane_stop;
+  coakka_v2_file_lane_get_bound_port_fn file_lane_get_bound_port;
+  coakka_v2_file_lane_prepare_receive_fn file_lane_prepare_receive;
+  coakka_v2_file_lane_submit_send_fn file_lane_submit_send;
+  coakka_v2_file_lane_get_transfer_fn file_lane_get_transfer;
+  coakka_v2_file_lane_wait_transfer_fn file_lane_wait_transfer;
+  coakka_v2_file_lane_cancel_transfer_fn file_lane_cancel_transfer;
+  coakka_v2_file_lane_forget_transfer_fn file_lane_forget_transfer;
+  coakka_v2_file_lane_get_stats_fn file_lane_get_stats;
+  coakka_v2_file_sha256_path_fn file_sha256_path;
 } coakka_v2_go_bindings_t;
 
 static void *coakka_v2_go_process_library_handle = NULL;
@@ -450,6 +562,20 @@ static coakka_v2_go_bindings_t *coakka_v2_go_open_library(const char *path, char
     return NULL;
   }
 
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_create_ex, "coakka_v2_file_lane_create_ex", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_destroy, "coakka_v2_file_lane_destroy", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_start, "coakka_v2_file_lane_start", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_stop, "coakka_v2_file_lane_stop", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_bound_port, "coakka_v2_file_lane_get_bound_port", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_prepare_receive, "coakka_v2_file_lane_prepare_receive", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_submit_send, "coakka_v2_file_lane_submit_send", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_transfer, "coakka_v2_file_lane_get_transfer", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_wait_transfer, "coakka_v2_file_lane_wait_transfer", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_cancel_transfer, "coakka_v2_file_lane_cancel_transfer", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_forget_transfer, "coakka_v2_file_lane_forget_transfer", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_stats, "coakka_v2_file_lane_get_stats", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_sha256_path, "coakka_v2_file_sha256_path", NULL);
+
   return bindings;
 }
 
@@ -535,6 +661,36 @@ static int coakka_v2_go_get_tcp_security_info(coakka_v2_go_bindings_t *bindings,
 static const char *coakka_v2_go_transport_apply_reason_name(coakka_v2_go_bindings_t *bindings, uint32_t reason) {
   return bindings->transport_apply_reason_name(reason);
 }
+
+static int coakka_v2_go_file_lane_available(coakka_v2_go_bindings_t *bindings) {
+  return bindings != NULL &&
+    bindings->file_lane_create_ex != NULL &&
+    bindings->file_lane_destroy != NULL &&
+    bindings->file_lane_start != NULL &&
+    bindings->file_lane_stop != NULL &&
+    bindings->file_lane_get_bound_port != NULL &&
+    bindings->file_lane_prepare_receive != NULL &&
+    bindings->file_lane_submit_send != NULL &&
+    bindings->file_lane_get_transfer != NULL &&
+    bindings->file_lane_wait_transfer != NULL &&
+    bindings->file_lane_cancel_transfer != NULL &&
+    bindings->file_lane_forget_transfer != NULL &&
+    bindings->file_lane_get_stats != NULL &&
+    bindings->file_sha256_path != NULL;
+}
+static int coakka_v2_go_file_lane_create_ex(coakka_v2_go_bindings_t *b, const coakka_v2_file_lane_config_t *c, coakka_v2_file_lane_t **out) { return b->file_lane_create_ex(c, out); }
+static void coakka_v2_go_file_lane_destroy(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane) { b->file_lane_destroy(lane); }
+static int coakka_v2_go_file_lane_start(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane) { return b->file_lane_start(lane); }
+static int coakka_v2_go_file_lane_stop(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane) { return b->file_lane_stop(lane); }
+static int coakka_v2_go_file_lane_get_bound_port(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, uint16_t *out) { return b->file_lane_get_bound_port(lane, out); }
+static int coakka_v2_go_file_lane_prepare_receive(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const coakka_v2_file_receive_spec_t *s) { return b->file_lane_prepare_receive(lane, s); }
+static int coakka_v2_go_file_lane_submit_send(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const coakka_v2_file_send_spec_t *s) { return b->file_lane_submit_send(lane, s); }
+static int coakka_v2_go_file_lane_get_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d, coakka_v2_file_transfer_snapshot_t *out) { return b->file_lane_get_transfer(lane, id, d, out); }
+static int coakka_v2_go_file_lane_wait_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d, uint64_t seq, uint32_t ms, coakka_v2_file_transfer_snapshot_t *out) { return b->file_lane_wait_transfer(lane, id, d, seq, ms, out); }
+static int coakka_v2_go_file_lane_cancel_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d) { return b->file_lane_cancel_transfer(lane, id, d); }
+static int coakka_v2_go_file_lane_forget_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d) { return b->file_lane_forget_transfer(lane, id, d); }
+static int coakka_v2_go_file_lane_get_stats(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, coakka_v2_file_lane_stats_t *out) { return b->file_lane_get_stats(lane, out); }
+static int coakka_v2_go_file_sha256_path(coakka_v2_go_bindings_t *b, const char *path, uint8_t out[32], uint64_t *size) { return b->file_sha256_path(path, out, size); }
 
 static int coakka_v2_go_wait_readable(int fd, int timeout_ms, int *out_ready) {
   if (out_ready == NULL) {
@@ -711,6 +867,7 @@ type nativeBindings struct {
 }
 
 type nativeRuntime unsafe.Pointer
+type nativeFileLane unsafe.Pointer
 
 var nativeLibraryMu sync.Mutex
 
@@ -739,6 +896,134 @@ func (b *nativeBindings) close() {
 	}
 	C.coakka_v2_go_close_library(b.ptr)
 	b.ptr = nil
+}
+
+func (b *nativeBindings) fileLaneAvailable() bool {
+	return b != nil && b.ptr != nil && C.coakka_v2_go_file_lane_available(b.ptr) != 0
+}
+
+func (b *nativeBindings) createFileLane(config FileLaneConfig) (nativeFileLane, error) {
+	bindHost := C.CString(config.BindHost)
+	defer C.free(unsafe.Pointer(bindHost))
+	var security *C.coakka_v2_file_lane_security_config_t
+	var securityValue C.coakka_v2_file_lane_security_config_t
+	var securityStrings []*C.char
+	if config.Security != nil {
+		values := []string{config.Security.CredentialID, config.Security.CACertificateFile, config.Security.IdentityCertificateFile, config.Security.PrivateKeyFile}
+		for _, value := range values {
+			securityStrings = append(securityStrings, C.CString(value))
+		}
+		defer func() {
+			for _, value := range securityStrings {
+				C.free(unsafe.Pointer(value))
+			}
+		}()
+		securityValue = C.coakka_v2_file_lane_security_config_t{
+			struct_size: C.size_t(C.sizeof_coakka_v2_file_lane_security_config_t), mode: C.uint32_t(config.Security.Mode),
+			credential_generation: C.uint64_t(config.Security.CredentialGeneration), credential_id: securityStrings[0],
+			ca_certificate_file: securityStrings[1], identity_certificate_file: securityStrings[2], private_key_file: securityStrings[3],
+		}
+		security = &securityValue
+	}
+	native := C.coakka_v2_file_lane_config_t{
+		struct_size: C.size_t(C.sizeof_coakka_v2_file_lane_config_t), flags: C.uint32_t(config.Flags), bind_host: bindHost,
+		bind_port: C.uint16_t(config.BindPort), queue_capacity: C.size_t(config.QueueCapacity), max_file_size: C.uint64_t(config.MaxFileSize),
+		io_timeout_ms: C.uint32_t(config.IOTimeoutMillis), checkpoint_bytes: C.uint64_t(config.CheckpointBytes),
+		progress_bytes: C.uint64_t(config.ProgressBytes), progress_interval_ms: C.uint32_t(config.ProgressIntervalMillis),
+		sender_worker_count: C.uint32_t(config.SenderWorkerCount), receiver_worker_count: C.uint32_t(config.ReceiverWorkerCount), security: security,
+	}
+	var lane *C.coakka_v2_file_lane_t
+	if err := requireStatus(C.coakka_v2_go_file_lane_create_ex(b.ptr, &native, &lane), "file_lane_create"); err != nil {
+		return nil, err
+	}
+	return nativeFileLane(unsafe.Pointer(lane)), nil
+}
+
+func (b *nativeBindings) startFileLane(lane nativeFileLane) error {
+	return requireStatus(C.coakka_v2_go_file_lane_start(b.ptr, (*C.coakka_v2_file_lane_t)(lane)), "file_lane_start")
+}
+func (b *nativeBindings) stopFileLane(lane nativeFileLane) int {
+	return int(C.coakka_v2_go_file_lane_stop(b.ptr, (*C.coakka_v2_file_lane_t)(lane)))
+}
+func (b *nativeBindings) destroyFileLane(lane nativeFileLane) {
+	C.coakka_v2_go_file_lane_destroy(b.ptr, (*C.coakka_v2_file_lane_t)(lane))
+}
+func (b *nativeBindings) fileLaneBoundPort(lane nativeFileLane) (uint16, error) {
+	var port C.uint16_t
+	err := requireStatus(C.coakka_v2_go_file_lane_get_bound_port(b.ptr, (*C.coakka_v2_file_lane_t)(lane), &port), "file_lane_get_bound_port")
+	return uint16(port), err
+}
+
+func copyFileDigest(out *[32]C.uint8_t, digest [32]byte) {
+	C.memcpy(unsafe.Pointer(&out[0]), unsafe.Pointer(&digest[0]), 32)
+}
+
+func (b *nativeBindings) prepareFileReceive(lane nativeFileLane, spec FileReceiveSpec) error {
+	id, token, path := C.CString(spec.TransferID), C.CString(spec.AuthorizationToken), C.CString(spec.DestinationPath)
+	defer C.free(unsafe.Pointer(id))
+	defer C.free(unsafe.Pointer(token))
+	defer C.free(unsafe.Pointer(path))
+	native := C.coakka_v2_file_receive_spec_t{struct_size: C.size_t(C.sizeof_coakka_v2_file_receive_spec_t), transfer_id: id, authorization_token: token, destination_path: path, expected_size: C.uint64_t(spec.ExpectedSize)}
+	copyFileDigest((*[32]C.uint8_t)(&native.expected_sha256), spec.ExpectedSHA256)
+	return requireStatus(C.coakka_v2_go_file_lane_prepare_receive(b.ptr, (*C.coakka_v2_file_lane_t)(lane), &native), "file_lane_prepare_receive")
+}
+
+func (b *nativeBindings) submitFileSend(lane nativeFileLane, spec FileSendSpec) error {
+	id, token, host, path := C.CString(spec.TransferID), C.CString(spec.AuthorizationToken), C.CString(spec.RemoteHost), C.CString(spec.SourcePath)
+	defer C.free(unsafe.Pointer(id))
+	defer C.free(unsafe.Pointer(token))
+	defer C.free(unsafe.Pointer(host))
+	defer C.free(unsafe.Pointer(path))
+	native := C.coakka_v2_file_send_spec_t{struct_size: C.size_t(C.sizeof_coakka_v2_file_send_spec_t), transfer_id: id, authorization_token: token, remote_host: host, remote_port: C.uint16_t(spec.RemotePort), source_path: path, expected_size: C.uint64_t(spec.ExpectedSize), timeout_ms: C.uint32_t(spec.TimeoutMillis)}
+	copyFileDigest((*[32]C.uint8_t)(&native.expected_sha256), spec.ExpectedSHA256)
+	return requireStatus(C.coakka_v2_go_file_lane_submit_send(b.ptr, (*C.coakka_v2_file_lane_t)(lane), &native), "file_lane_submit_send")
+}
+
+func (b *nativeBindings) fileTransfer(lane nativeFileLane, transferID string, direction FileTransferDirection, sequence uint64, timeoutMillis uint32, wait bool) (FileTransferSnapshot, error) {
+	id := C.CString(transferID)
+	defer C.free(unsafe.Pointer(id))
+	native := C.coakka_v2_file_transfer_snapshot_t{struct_size: C.size_t(C.sizeof_coakka_v2_file_transfer_snapshot_t)}
+	var status C.int
+	if wait {
+		status = C.coakka_v2_go_file_lane_wait_transfer(b.ptr, (*C.coakka_v2_file_lane_t)(lane), id, C.uint32_t(direction), C.uint64_t(sequence), C.uint32_t(timeoutMillis), &native)
+	} else {
+		status = C.coakka_v2_go_file_lane_get_transfer(b.ptr, (*C.coakka_v2_file_lane_t)(lane), id, C.uint32_t(direction), &native)
+	}
+	if err := requireStatus(status, "file_lane_transfer"); err != nil {
+		return FileTransferSnapshot{}, err
+	}
+	return FileTransferSnapshot{Direction: FileTransferDirection(native.direction), State: FileTransferState(native.state), Result: FileTransferResult(native.result), ExpectedSize: uint64(native.expected_size), TransferredBytes: uint64(native.transferred_bytes), CommittedOffset: uint64(native.committed_offset), ProgressMilli: uint32(native.progress_milli), CancelRequested: native.cancel_requested != 0, UpdateSequence: uint64(native.update_sequence), SubmittedMonoNS: uint64(native.submitted_mono_ns), StartedMonoNS: uint64(native.started_mono_ns), UpdatedMonoNS: uint64(native.updated_mono_ns), TerminalMonoNS: uint64(native.terminal_mono_ns), Detail: C.GoString(&native.detail[0])}, nil
+}
+
+func (b *nativeBindings) cancelFileTransfer(lane nativeFileLane, transferID string, direction FileTransferDirection, forget bool) error {
+	id := C.CString(transferID)
+	defer C.free(unsafe.Pointer(id))
+	var status C.int
+	if forget {
+		status = C.coakka_v2_go_file_lane_forget_transfer(b.ptr, (*C.coakka_v2_file_lane_t)(lane), id, C.uint32_t(direction))
+	} else {
+		status = C.coakka_v2_go_file_lane_cancel_transfer(b.ptr, (*C.coakka_v2_file_lane_t)(lane), id, C.uint32_t(direction))
+	}
+	return requireStatus(status, "file_lane_transfer_control")
+}
+func (b *nativeBindings) fileLaneStats(lane nativeFileLane) (FileLaneStats, error) {
+	native := C.coakka_v2_file_lane_stats_t{struct_size: C.size_t(C.sizeof_coakka_v2_file_lane_stats_t)}
+	if err := requireStatus(C.coakka_v2_go_file_lane_get_stats(b.ptr, (*C.coakka_v2_file_lane_t)(lane), &native), "file_lane_get_stats"); err != nil {
+		return FileLaneStats{}, err
+	}
+	return FileLaneStats{uint64(native.queue_capacity), uint64(native.queued_sends), uint64(native.prepared_receives), uint64(native.active_sends), uint64(native.active_receives), uint64(native.retained_records), uint64(native.submitted_sends), uint64(native.prepared_receive_count), uint64(native.completed_sends), uint64(native.completed_receives), uint64(native.failed_sends), uint64(native.failed_receives), uint64(native.canceled_transfers), uint64(native.completed_send_bytes), uint64(native.completed_receive_bytes)}, nil
+}
+func (b *nativeBindings) fileSHA256(path string) (FileDigest, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	var digest [32]C.uint8_t
+	var size C.uint64_t
+	if err := requireStatus(C.coakka_v2_go_file_sha256_path(b.ptr, cPath, &digest[0], &size), "file_sha256_path"); err != nil {
+		return FileDigest{}, err
+	}
+	var out [32]byte
+	C.memcpy(unsafe.Pointer(&out[0]), unsafe.Pointer(&digest[0]), 32)
+	return FileDigest{SHA256: out, Size: uint64(size)}, nil
 }
 
 func (b *nativeBindings) getAbiVersion() uint32 {

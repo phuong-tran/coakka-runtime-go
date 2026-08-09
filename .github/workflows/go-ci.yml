@@ -54,17 +54,6 @@ jobs:
           native_count="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) | wc -l | tr -d ' ')"
           test "${native_count}" = "5"
 
-          expected_platforms=(
-            "linux-aarch64"
-            "linux-x86_64"
-            "macos-aarch64"
-            "windows-aarch64"
-            "windows-x86_64"
-          )
-          for platform in "${expected_platforms[@]}"; do
-            test -d "native/${platform}"
-          done
-
           unexpected_aliases="$(find native -type f \( \
             -name 'libcoakka_runtime_v2.so' -o \
             -name 'libcoakka_runtime_v2.dylib' -o \

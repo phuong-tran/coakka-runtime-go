@@ -1,5 +1,27 @@
 # Go Connector Release Notes
 
+## v1.5.1
+
+This patch keeps connector version `2.1.0` and native generation
+`2.1.0+60ddf70d` unchanged. It replaces the private connector-repository link
+with the canonical public file-lane contract and adds a regression test that
+rejects private documentation links in the packaged README.
+
+## v1.5.0
+
+This module release adds `OpenFileLane` for connector version `2.1.0` over
+native generation `2.1.0+60ddf70d`. It remains on semantic major `v1`
+because the public module path has no `/v2` suffix.
+The concurrent-safe API provides bounded lane configuration, receive
+preparation, sender submission, SHA-256, sequence-based progress waits,
+cancellation, retained terminal records, stats, and stop-before-drain close.
+Direct TCP, TLS, and mutual TLS are startup profiles.
+
+The module packages exact Linux ARM64/x86-64, macOS ARM64, and Windows
+ARM64/x86-64 payloads. Unit tests, payload verification, the clean module
+consumer, and a `9 MiB + 731 byte` file transfer with SHA-256 equality pass on
+macOS ARM64. Matching-host execution claims remain platform-specific.
+
 ## v1.4.1
 
 This release adds runtime-v2 transport configuration while preserving the
