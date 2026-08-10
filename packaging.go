@@ -1,8 +1,8 @@
 package coakka_v2_connector
 
 const (
-	CoakkaV2GoVersion            = "2.1.0"
-	CoakkaV2NativeCoreVersion    = "2.1.0"
-	CoakkaV2NativeGitCommit      = "60ddf70d"
-	CoakkaV2NativePackageVersion = "2.1.0+60ddf70d"
+	CoakkaV2GoVersion            = "2.3.0"
+	CoakkaV2NativeCoreVersion    = "2.3.0"
+	CoakkaV2NativeGitCommit      = "a83ab412"
+	CoakkaV2NativePackageVersion = "2.3.0+a83ab412"
 )

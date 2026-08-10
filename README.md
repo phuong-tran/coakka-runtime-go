@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.5.1-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.5.1)
-[![Release](https://img.shields.io/badge/release-v1.5.1-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.5.1)
+[![Version](https://img.shields.io/badge/version-v1.6.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases)
+[![Release](https://img.shields.io/badge/release-v1.6.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
@@ -27,11 +27,11 @@ for concepts, integration paths, operations, and runnable samples.
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.5.1
+go get github.com/phuong-tran/coakka-runtime-go@v1.6.0
 ```
 
-Published module version `v1.5.1` embeds connector version `2.1.0` and native runtime generation
-`2.1.0+60ddf70d`. Every release records its native generation separately so a
+Module release `v1.6.0` embeds connector version `2.3.0` and native runtime generation
+`2.3.0+a83ab412`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version. The module path
 does not use a `/v2` suffix, so the release remains on semantic major `v1`.
 
@@ -80,7 +80,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.5.1
+go get github.com/phuong-tran/coakka-runtime-go@v1.6.0
 ```
 
 ## Quick Start
@@ -189,7 +189,7 @@ bash scripts/package-release.sh
 The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-2.1.0.tar.gz
+go/coakka-v2-connector-go-2.3.0.tar.gz
 ```
 
 Public Go module export:
@@ -294,7 +294,7 @@ Native runtime resolution order:
 - local fallback under `lib/`
 
 The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.5.1`
+ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.6.0`
 request/reply passes on macOS ARM64 and Linux ARM64/x86-64. All five native
 digests and binary formats match release metadata. Both Windows payloads pass
 package, export, dependency, and digest gates; matching Go-on-Windows execution
@@ -328,14 +328,18 @@ Cross-language demo web lives under `examples/` when that workspace is present.
 
 `OpenFileLane(...)` exposes the independent native bulk-transfer lane with
 concurrent wait/cancel and draining `Close()`. See the shared
-[file-lane contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-file-transfer.md)
-before packaging it with a native runtime.
+[file-lane contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-file-transfer.md) before packaging it with a native runtime.
 
-## Continue Integrating
+## AI-Assisted Integration
 
-Use the runnable Go sample and
-[AI-Assisted Integration](https://github.com/phuong-tran/coakka-samples/blob/main/docs/ai-assisted-integration.md)
-before generating connection strategy, TLS/mTLS, File Lane, or Stream Lane
-code. The current module includes File Lane. Stream Lane remains an exact-source
-integration until a matching public module tag is promoted; do not attach its
-imports to Go module `v1.5.1`.
+Before generating application code, use the selected connector README together
+with the public [AI-assisted integration guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/ai-assisted-integration.md).
+It requires an exact package coordinate, platform evidence, the runnable
+language sample, and the feature-specific lifecycle contract. Do not translate
+API identifiers from another language by analogy.
+
+## Stream Lane
+
+Module `v1.6.0` contains the Stream Lane connector surface over exact native
+generation `2.3.0+a83ab412`. Keep that pairing intact and follow the public
+[streaming contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-streaming.md).

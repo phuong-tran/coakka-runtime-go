@@ -1,11 +1,11 @@
 # Go Connector Release Notes
 
-## v1.5.1
+## v1.6.0
 
-This patch keeps connector version `2.1.0` and native generation
-`2.1.0+60ddf70d` unchanged. It replaces the private connector-repository link
-with the canonical public file-lane contract and adds a regression test that
-rejects private documentation links in the packaged README.
+Adds concurrent-safe Stream Lane bindings with `runtime/cgo.Handle` callback
+ownership, panic containment, credit and pressure snapshots, draining close,
+and exact native generation `2.3.0+a83ab412`. The module remains on semantic
+major `v1` because its public path has no `/v2` suffix.
 
 ## v1.5.0
 
