@@ -330,3 +330,12 @@ Cross-language demo web lives under `examples/` when that workspace is present.
 concurrent wait/cancel and draining `Close()`. See the shared
 [file-lane contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-file-transfer.md)
 before packaging it with a native runtime.
+
+## Continue Integrating
+
+Use the runnable Go sample and
+[AI-Assisted Integration](https://github.com/phuong-tran/coakka-samples/blob/main/docs/ai-assisted-integration.md)
+before generating connection strategy, TLS/mTLS, File Lane, or Stream Lane
+code. The current module includes File Lane. Stream Lane remains an exact-source
+integration until a matching public module tag is promoted; do not attach its
+imports to Go module `v1.5.1`.
