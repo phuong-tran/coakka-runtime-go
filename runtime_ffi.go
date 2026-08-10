@@ -21,6 +21,7 @@ package coakka_v2_connector
 
 typedef struct coakka_v2_runtime_t coakka_v2_runtime_t;
 typedef struct coakka_v2_file_lane_t coakka_v2_file_lane_t;
+typedef struct coakka_v2_stream_lane_t coakka_v2_stream_lane_t;
 
 typedef struct {
   const char *system_name;
@@ -345,6 +346,139 @@ typedef struct {
   uint64_t completed_receive_bytes;
 } coakka_v2_file_lane_stats_t;
 
+typedef struct {
+  size_t struct_size;
+  uint64_t sequence;
+  uint64_t captured_mono_ns;
+  uint64_t dropped_before;
+  uint32_t flags;
+  size_t size;
+} coakka_v2_stream_frame_t;
+
+typedef int (*coakka_v2_stream_source_next_fn)(void *, uint8_t *, size_t,
+                                                coakka_v2_stream_frame_t *);
+typedef int (*coakka_v2_stream_consumer_fn)(void *, const uint8_t *,
+                                             const coakka_v2_stream_frame_t *);
+
+typedef struct {
+  size_t struct_size;
+  uint32_t mode;
+  uint32_t reserved;
+  uint64_t credential_generation;
+  const char *credential_id;
+  const char *ca_certificate_file;
+  const char *identity_certificate_file;
+  const char *private_key_file;
+} coakka_v2_stream_lane_security_config_t;
+
+typedef struct {
+  size_t struct_size;
+  uint32_t flags;
+  const char *bind_host;
+  uint16_t bind_port;
+  size_t capacity;
+  uint32_t max_frame_bytes;
+  uint32_t max_window_bytes;
+  uint32_t io_timeout_ms;
+  uint32_t source_retry_ms;
+  uint32_t progress_frames;
+  uint32_t progress_interval_ms;
+  uint32_t publisher_worker_count;
+  uint32_t subscriber_worker_count;
+  const coakka_v2_stream_lane_security_config_t *security;
+  uint32_t pressure_after_ms;
+  uint32_t stalled_after_ms;
+  uint32_t recovery_after_ms;
+  uint32_t pressure_observation_ms;
+} coakka_v2_stream_lane_config_t;
+
+typedef struct {
+  size_t struct_size;
+  const char *session_id;
+  const char *authorization_token;
+  uint64_t format_id;
+  uint32_t max_frame_bytes;
+  coakka_v2_stream_source_next_fn source_next;
+  void *source_context;
+} coakka_v2_stream_publish_spec_t;
+
+typedef struct {
+  size_t struct_size;
+  const char *session_id;
+  const char *authorization_token;
+  const char *remote_host;
+  uint16_t remote_port;
+  uint64_t format_id;
+  uint32_t max_frame_bytes;
+  uint32_t initial_window_bytes;
+  uint32_t timeout_ms;
+  coakka_v2_stream_consumer_fn consume;
+  void *consumer_context;
+} coakka_v2_stream_subscribe_spec_t;
+
+typedef struct {
+  size_t struct_size;
+  uint32_t direction;
+  uint32_t state;
+  uint32_t result;
+  uint64_t format_id;
+  uint64_t frames;
+  uint64_t bytes;
+  uint64_t dropped_frames;
+  uint64_t last_sequence;
+  uint32_t negotiated_max_frame_bytes;
+  uint32_t window_bytes;
+  uint32_t cancel_requested;
+  uint64_t update_sequence;
+  uint64_t submitted_mono_ns;
+  uint64_t started_mono_ns;
+  uint64_t updated_mono_ns;
+  uint64_t terminal_mono_ns;
+  char detail[160];
+} coakka_v2_stream_session_snapshot_t;
+
+typedef struct {
+  size_t struct_size;
+  uint32_t direction;
+  uint32_t state;
+  uint32_t reason_bits;
+  uint32_t available_credit_bytes;
+  uint32_t window_capacity_bytes;
+  uint64_t update_sequence;
+  uint64_t transition_count;
+  uint64_t observed_mono_ns;
+  uint64_t state_started_mono_ns;
+  uint64_t pressure_started_mono_ns;
+  uint64_t last_progress_mono_ns;
+  uint64_t observed_delivery_bps;
+  uint64_t current_operation_ns;
+  uint64_t last_operation_ns;
+  uint64_t total_pressured_ns;
+  uint64_t max_pressured_ns;
+} coakka_v2_stream_pressure_snapshot_t;
+
+typedef struct {
+  size_t struct_size;
+  size_t capacity;
+  size_t queued_subscribers;
+  size_t prepared_publishers;
+  size_t active_publishers;
+  size_t active_subscribers;
+  size_t retained_records;
+  uint64_t submitted_subscribers;
+  uint64_t prepared_publisher_count;
+  uint64_t ended_publishers;
+  uint64_t ended_subscribers;
+  uint64_t failed_publishers;
+  uint64_t failed_subscribers;
+  uint64_t canceled_sessions;
+  uint64_t published_frames;
+  uint64_t published_bytes;
+  uint64_t consumed_frames;
+  uint64_t consumed_bytes;
+  uint64_t source_reported_drops;
+} coakka_v2_stream_lane_stats_t;
+
 typedef uint32_t (*coakka_v2_runtime_get_abi_version_fn)(void);
 typedef int (*coakka_v2_runtime_get_info_fn)(coakka_v2_runtime_info_t *out_info);
 typedef int (*coakka_v2_runtime_get_config_fn)(coakka_v2_runtime_t *rt, coakka_v2_runtime_config_view_t *out_config);
@@ -377,6 +511,20 @@ typedef int (*coakka_v2_file_lane_cancel_transfer_fn)(coakka_v2_file_lane_t *, c
 typedef int (*coakka_v2_file_lane_forget_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t);
 typedef int (*coakka_v2_file_lane_get_stats_fn)(coakka_v2_file_lane_t *, coakka_v2_file_lane_stats_t *);
 typedef int (*coakka_v2_file_sha256_path_fn)(const char *, uint8_t[32], uint64_t *);
+typedef int (*coakka_v2_stream_lane_create_ex_fn)(const coakka_v2_stream_lane_config_t *, coakka_v2_stream_lane_t **);
+typedef void (*coakka_v2_stream_lane_destroy_fn)(coakka_v2_stream_lane_t *);
+typedef int (*coakka_v2_stream_lane_start_fn)(coakka_v2_stream_lane_t *);
+typedef int (*coakka_v2_stream_lane_stop_fn)(coakka_v2_stream_lane_t *);
+typedef int (*coakka_v2_stream_lane_get_bound_port_fn)(coakka_v2_stream_lane_t *, uint16_t *);
+typedef int (*coakka_v2_stream_lane_prepare_publish_fn)(coakka_v2_stream_lane_t *, const coakka_v2_stream_publish_spec_t *);
+typedef int (*coakka_v2_stream_lane_subscribe_fn)(coakka_v2_stream_lane_t *, const coakka_v2_stream_subscribe_spec_t *);
+typedef int (*coakka_v2_stream_lane_get_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_session_snapshot_t *);
+typedef int (*coakka_v2_stream_lane_wait_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_session_snapshot_t *);
+typedef int (*coakka_v2_stream_lane_get_pressure_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_pressure_snapshot_t *);
+typedef int (*coakka_v2_stream_lane_wait_pressure_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_pressure_snapshot_t *);
+typedef int (*coakka_v2_stream_lane_cancel_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t);
+typedef int (*coakka_v2_stream_lane_forget_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t);
+typedef int (*coakka_v2_stream_lane_get_stats_fn)(coakka_v2_stream_lane_t *, coakka_v2_stream_lane_stats_t *);
 
 typedef struct coakka_v2_go_bindings_t {
   void *handle;
@@ -412,6 +560,20 @@ typedef struct coakka_v2_go_bindings_t {
   coakka_v2_file_lane_forget_transfer_fn file_lane_forget_transfer;
   coakka_v2_file_lane_get_stats_fn file_lane_get_stats;
   coakka_v2_file_sha256_path_fn file_sha256_path;
+  coakka_v2_stream_lane_create_ex_fn stream_lane_create_ex;
+  coakka_v2_stream_lane_destroy_fn stream_lane_destroy;
+  coakka_v2_stream_lane_start_fn stream_lane_start;
+  coakka_v2_stream_lane_stop_fn stream_lane_stop;
+  coakka_v2_stream_lane_get_bound_port_fn stream_lane_get_bound_port;
+  coakka_v2_stream_lane_prepare_publish_fn stream_lane_prepare_publish;
+  coakka_v2_stream_lane_subscribe_fn stream_lane_subscribe;
+  coakka_v2_stream_lane_get_session_fn stream_lane_get_session;
+  coakka_v2_stream_lane_wait_session_fn stream_lane_wait_session;
+  coakka_v2_stream_lane_get_pressure_fn stream_lane_get_pressure;
+  coakka_v2_stream_lane_wait_pressure_fn stream_lane_wait_pressure;
+  coakka_v2_stream_lane_cancel_session_fn stream_lane_cancel_session;
+  coakka_v2_stream_lane_forget_session_fn stream_lane_forget_session;
+  coakka_v2_stream_lane_get_stats_fn stream_lane_get_stats;
 } coakka_v2_go_bindings_t;
 
 static void *coakka_v2_go_process_library_handle = NULL;
@@ -427,6 +589,26 @@ static char *coakka_v2_go_duplicate_text(const char *value) {
     memcpy(copy, value, size);
   }
   return copy;
+}
+
+extern int coakka_v2_go_stream_source_next(uintptr_t context,
+                                            uint8_t *destination,
+                                            size_t capacity,
+                                            coakka_v2_stream_frame_t *out_frame);
+extern int coakka_v2_go_stream_consume(uintptr_t context, const uint8_t *data,
+                                       const coakka_v2_stream_frame_t *frame);
+
+static int coakka_v2_go_stream_source_trampoline(
+    void *context, uint8_t *destination, size_t capacity,
+    coakka_v2_stream_frame_t *out_frame) {
+  return coakka_v2_go_stream_source_next((uintptr_t)context, destination,
+                                          capacity, out_frame);
+}
+
+static int coakka_v2_go_stream_consumer_trampoline(
+    void *context, const uint8_t *data,
+    const coakka_v2_stream_frame_t *frame) {
+  return coakka_v2_go_stream_consume((uintptr_t)context, data, frame);
 }
 
 #ifdef _WIN32
@@ -575,6 +757,20 @@ static coakka_v2_go_bindings_t *coakka_v2_go_open_library(const char *path, char
   coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_forget_transfer, "coakka_v2_file_lane_forget_transfer", NULL);
   coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_stats, "coakka_v2_file_lane_get_stats", NULL);
   coakka_v2_go_load_symbol(handle, (void **)&bindings->file_sha256_path, "coakka_v2_file_sha256_path", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_create_ex, "coakka_v2_stream_lane_create_ex", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_destroy, "coakka_v2_stream_lane_destroy", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_start, "coakka_v2_stream_lane_start", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_stop, "coakka_v2_stream_lane_stop", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_bound_port, "coakka_v2_stream_lane_get_bound_port", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_prepare_publish, "coakka_v2_stream_lane_prepare_publish", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_subscribe, "coakka_v2_stream_lane_subscribe", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_session, "coakka_v2_stream_lane_get_session", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_wait_session, "coakka_v2_stream_lane_wait_session", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_pressure, "coakka_v2_stream_lane_get_pressure", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_wait_pressure, "coakka_v2_stream_lane_wait_pressure", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_cancel_session, "coakka_v2_stream_lane_cancel_session", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_forget_session, "coakka_v2_stream_lane_forget_session", NULL);
+  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_stats, "coakka_v2_stream_lane_get_stats", NULL);
 
   return bindings;
 }
@@ -691,6 +887,37 @@ static int coakka_v2_go_file_lane_cancel_transfer(coakka_v2_go_bindings_t *b, co
 static int coakka_v2_go_file_lane_forget_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d) { return b->file_lane_forget_transfer(lane, id, d); }
 static int coakka_v2_go_file_lane_get_stats(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, coakka_v2_file_lane_stats_t *out) { return b->file_lane_get_stats(lane, out); }
 static int coakka_v2_go_file_sha256_path(coakka_v2_go_bindings_t *b, const char *path, uint8_t out[32], uint64_t *size) { return b->file_sha256_path(path, out, size); }
+
+int coakka_v2_go_stream_lane_available(coakka_v2_go_bindings_t *b) {
+  return b != NULL && b->stream_lane_create_ex != NULL &&
+    b->stream_lane_destroy != NULL && b->stream_lane_start != NULL &&
+    b->stream_lane_stop != NULL && b->stream_lane_get_bound_port != NULL &&
+    b->stream_lane_prepare_publish != NULL && b->stream_lane_subscribe != NULL &&
+    b->stream_lane_get_session != NULL && b->stream_lane_wait_session != NULL &&
+    b->stream_lane_get_pressure != NULL && b->stream_lane_wait_pressure != NULL &&
+    b->stream_lane_cancel_session != NULL && b->stream_lane_forget_session != NULL &&
+    b->stream_lane_get_stats != NULL;
+}
+int coakka_v2_go_stream_lane_create_ex(coakka_v2_go_bindings_t *b, const coakka_v2_stream_lane_config_t *c, coakka_v2_stream_lane_t **out) { return b->stream_lane_create_ex(c, out); }
+void coakka_v2_go_stream_lane_destroy(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane) { b->stream_lane_destroy(lane); }
+int coakka_v2_go_stream_lane_start(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane) { return b->stream_lane_start(lane); }
+int coakka_v2_go_stream_lane_stop(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane) { return b->stream_lane_stop(lane); }
+int coakka_v2_go_stream_lane_get_bound_port(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, uint16_t *out) { return b->stream_lane_get_bound_port(lane, out); }
+int coakka_v2_go_stream_lane_prepare_publish(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, const char *token, uint64_t format, uint32_t max_frame, uintptr_t context) {
+  coakka_v2_stream_publish_spec_t spec = {sizeof(spec), id, token, format, max_frame, coakka_v2_go_stream_source_trampoline, (void *)context};
+  return b->stream_lane_prepare_publish(lane, &spec);
+}
+int coakka_v2_go_stream_lane_subscribe(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, const char *token, const char *host, uint16_t port, uint64_t format, uint32_t max_frame, uint32_t window, uint32_t timeout, uintptr_t context) {
+  coakka_v2_stream_subscribe_spec_t spec = {sizeof(spec), id, token, host, port, format, max_frame, window, timeout, coakka_v2_go_stream_consumer_trampoline, (void *)context};
+  return b->stream_lane_subscribe(lane, &spec);
+}
+int coakka_v2_go_stream_lane_get_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, coakka_v2_stream_session_snapshot_t *out) { return b->stream_lane_get_session(lane, id, direction, out); }
+int coakka_v2_go_stream_lane_wait_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, uint64_t sequence, uint32_t timeout, coakka_v2_stream_session_snapshot_t *out) { return b->stream_lane_wait_session(lane, id, direction, sequence, timeout, out); }
+int coakka_v2_go_stream_lane_get_pressure(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, coakka_v2_stream_pressure_snapshot_t *out) { return b->stream_lane_get_pressure(lane, id, direction, out); }
+int coakka_v2_go_stream_lane_wait_pressure(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, uint64_t sequence, uint32_t timeout, coakka_v2_stream_pressure_snapshot_t *out) { return b->stream_lane_wait_pressure(lane, id, direction, sequence, timeout, out); }
+int coakka_v2_go_stream_lane_cancel_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction) { return b->stream_lane_cancel_session(lane, id, direction); }
+int coakka_v2_go_stream_lane_forget_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction) { return b->stream_lane_forget_session(lane, id, direction); }
+int coakka_v2_go_stream_lane_get_stats(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, coakka_v2_stream_lane_stats_t *out) { return b->stream_lane_get_stats(lane, out); }
 
 static int coakka_v2_go_wait_readable(int fd, int timeout_ms, int *out_ready) {
   if (out_ready == NULL) {
