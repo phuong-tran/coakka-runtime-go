@@ -76,12 +76,16 @@ const (
 // FileLaneSecurityConfig names TLS material read when a lane starts.
 // Private-key paths and per-transfer tokens must never be logged.
 type FileLaneSecurityConfig struct {
-	Mode                                                                     FileLaneSecurityMode
-	CredentialGeneration                                                     uint64
-	CredentialID, CACertificateFile, IdentityCertificateFile, PrivateKeyFile string
+	Mode                    FileLaneSecurityMode
+	CredentialGeneration    uint64
+	CredentialID            string
+	CACertificateFile       string
+	IdentityCertificateFile string
+	PrivateKeyFile          string
 }
 
 // FileLaneConfig controls a bounded lane. Zero tuning fields select native defaults.
+// Size fields are bytes and time fields are milliseconds.
 type FileLaneConfig struct {
 	Flags                  uint32
 	BindHost               string
@@ -122,19 +126,23 @@ func (c FileLaneConfig) validate() error {
 
 // FileReceiveSpec authorizes one destination and exact content identity.
 type FileReceiveSpec struct {
-	TransferID, AuthorizationToken, DestinationPath string
-	ExpectedSize                                    uint64
-	ExpectedSHA256                                  [32]byte
+	TransferID         string
+	AuthorizationToken string
+	DestinationPath    string
+	ExpectedSize       uint64
+	ExpectedSHA256     [32]byte
 }
 
 // FileSendSpec names the source and endpoint for a previously prepared receive.
 type FileSendSpec struct {
-	TransferID, AuthorizationToken, RemoteHost string
-	RemotePort                                 uint16
-	SourcePath                                 string
-	ExpectedSize                               uint64
-	ExpectedSHA256                             [32]byte
-	TimeoutMillis                              uint32
+	TransferID         string
+	AuthorizationToken string
+	RemoteHost         string
+	RemotePort         uint16
+	SourcePath         string
+	ExpectedSize       uint64
+	ExpectedSHA256     [32]byte
+	TimeoutMillis      uint32
 }
 
 // FileDigest contains a file's SHA-256 and exact byte count.
@@ -145,6 +153,7 @@ type FileDigest struct {
 
 // FileTransferSnapshot is an immutable progress view.
 // Its monotonic timestamps are process-local and are not wall-clock values.
+// ProgressMilli ranges from 0 to 100000 (100.000%); UpdateSequence advances on retained changes.
 type FileTransferSnapshot struct {
 	Direction                                                                     FileTransferDirection
 	State                                                                         FileTransferState
@@ -283,43 +292,44 @@ func (l *FileLane) SubmitSend(spec FileSendSpec) error {
 }
 
 // Transfer returns the current copied snapshot without waiting.
-func (l *FileLane) Transfer(id string, direction FileTransferDirection) (FileTransferSnapshot, error) {
+func (l *FileLane) Transfer(transferID string, direction FileTransferDirection) (FileTransferSnapshot, error) {
 	lane, err := l.acquire()
 	if err != nil {
 		return FileTransferSnapshot{}, err
 	}
 	defer l.release()
-	return l.bindings.fileTransfer(lane, id, direction, 0, 0, false)
+	return l.bindings.fileTransfer(lane, transferID, direction, 0, 0, false)
 }
 
-// WaitTransfer blocks until the sequence advances, the timeout expires, or the lane stops.
-func (l *FileLane) WaitTransfer(id string, direction FileTransferDirection, afterSequence uint64, timeoutMillis uint32) (FileTransferSnapshot, error) {
+// WaitTransfer blocks until the sequence advances, timeoutMillis expires, or the lane stops.
+// afterSequence is the last update already handled; zero requests the current state.
+func (l *FileLane) WaitTransfer(transferID string, direction FileTransferDirection, afterSequence uint64, timeoutMillis uint32) (FileTransferSnapshot, error) {
 	lane, err := l.acquire()
 	if err != nil {
 		return FileTransferSnapshot{}, err
 	}
 	defer l.release()
-	return l.bindings.fileTransfer(lane, id, direction, afterSequence, timeoutMillis, true)
+	return l.bindings.fileTransfer(lane, transferID, direction, afterSequence, timeoutMillis, true)
 }
 
 // Cancel requests cooperative cancellation; observe terminal state before Forget.
-func (l *FileLane) Cancel(id string, direction FileTransferDirection) error {
+func (l *FileLane) Cancel(transferID string, direction FileTransferDirection) error {
 	lane, err := l.acquire()
 	if err != nil {
 		return err
 	}
 	defer l.release()
-	return l.bindings.cancelFileTransfer(lane, id, direction, false)
+	return l.bindings.cancelFileTransfer(lane, transferID, direction, false)
 }
 
 // Forget releases one retained terminal record after its outcome is recorded.
-func (l *FileLane) Forget(id string, direction FileTransferDirection) error {
+func (l *FileLane) Forget(transferID string, direction FileTransferDirection) error {
 	lane, err := l.acquire()
 	if err != nil {
 		return err
 	}
 	defer l.release()
-	return l.bindings.cancelFileTransfer(lane, id, direction, true)
+	return l.bindings.cancelFileTransfer(lane, transferID, direction, true)
 }
 
 // Stats returns a copied lane-level observability snapshot.
