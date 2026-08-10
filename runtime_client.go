@@ -10,9 +10,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	coakkav2 "github.com/phuong-tran/coakka-runtime-go/coakka/v2"
-	"google.golang.org/protobuf/proto"
 )
 
 type DeadletterError struct {
@@ -247,18 +244,18 @@ func MakeTypedRequest(source string, target string, payload []byte, payloadIdent
 		Source:               source,
 		Target:               target,
 		ReplyTo:              "",
-		Kind:                 coakkav2.MessageKind_MESSAGE_KIND_REQUEST,
+		Kind:                 MessageKindRequest,
 		OneWay:               oneWay,
 		TimeoutMs:            int32(timeout / time.Millisecond),
 		Payload:              payload,
 		Headers:              outHeaders,
-		Status:               coakkav2.BusinessStatus_BUSINESS_STATUS_OK,
+		Status:               BusinessStatusOK,
 		ErrorCode:            "",
 		ErrorMessage:         "",
-		DeliveryHint:         coakkav2.DeliveryHint(deliveryHint),
+		DeliveryHint:         deliveryHint,
 		MessageType:          payloadIdentity.MessageType,
 		PayloadSchemaVersion: payloadIdentity.PayloadSchemaVersion,
-		PayloadFormat:        coakkav2.PayloadFormat(payloadIdentity.PayloadFormat),
+		PayloadFormat:        payloadIdentity.PayloadFormat,
 	}
 	if !oneWay {
 		envelope.CorrelationId = messageID
@@ -289,18 +286,18 @@ func MakeTypedReply(request *Envelope, source string, payload []byte, payloadIde
 		Source:               source,
 		Target:               request.GetSource(),
 		ReplyTo:              "",
-		Kind:                 coakkav2.MessageKind_MESSAGE_KIND_RESPONSE,
+		Kind:                 MessageKindResponse,
 		OneWay:               false,
 		TimeoutMs:            request.GetTimeoutMs(),
 		Payload:              payload,
 		Headers:              map[string]string{},
-		Status:               coakkav2.BusinessStatus_BUSINESS_STATUS_OK,
+		Status:               BusinessStatusOK,
 		ErrorCode:            "",
 		ErrorMessage:         "",
-		DeliveryHint:         coakkav2.DeliveryHint_DELIVERY_HINT_ROUTER_DEFAULT,
+		DeliveryHint:         DeliveryHintRouterDefault,
 		MessageType:          payloadIdentity.MessageType,
 		PayloadSchemaVersion: payloadIdentity.PayloadSchemaVersion,
-		PayloadFormat:        coakkav2.PayloadFormat(payloadIdentity.PayloadFormat),
+		PayloadFormat:        payloadIdentity.PayloadFormat,
 	}, nil
 }
 
@@ -338,13 +335,13 @@ func MakeRawRequest(messageID string, source string, target string, replyTo stri
 		Source:        source,
 		Target:        target,
 		ReplyTo:       replyTo,
-		Kind:          coakkav2.MessageKind_MESSAGE_KIND_REQUEST,
+		Kind:          MessageKindRequest,
 		OneWay:        false,
 		TimeoutMs:     int32(timeout / time.Millisecond),
 		Payload:       payload,
 		Headers:       map[string]string{},
-		Status:        coakkav2.BusinessStatus_BUSINESS_STATUS_OK,
-		DeliveryHint:  coakkav2.DeliveryHint(deliveryHint),
+		Status:        BusinessStatusOK,
+		DeliveryHint:  deliveryHint,
 	}
 }
 
@@ -392,7 +389,7 @@ func (c *GoRuntimeClient) AskJSON(source string, target string, payload any, pay
 }
 
 func (c *GoRuntimeClient) AskRaw(request *Envelope, timeout time.Duration) (*Envelope, error) {
-	if request.GetKind() != coakkav2.MessageKind_MESSAGE_KIND_REQUEST {
+	if request.GetKind() != MessageKindRequest {
 		return nil, fmt.Errorf("AskRaw requires MESSAGE_KIND_REQUEST")
 	}
 	if request.GetOneWay() {
@@ -401,7 +398,7 @@ func (c *GoRuntimeClient) AskRaw(request *Envelope, timeout time.Duration) (*Env
 	if request.GetMessageId() == "" {
 		return nil, fmt.Errorf("AskRaw requires messageId")
 	}
-	normalized := protoCloneEnvelope(request)
+	normalized := cloneEnvelope(request)
 	if normalized.CorrelationId == "" {
 		normalized.CorrelationId = normalized.MessageId
 	}
@@ -745,64 +742,7 @@ func (c *GoRuntimeClient) buildControlEnvelopeBytes(
 	if sourceConnector == "" {
 		sourceConnector = c.config.SystemName
 	}
-	snapshot := &RouteSnapshotPayload{
-		Generation: generation,
-		Routes:     make([]*coakkav2.Route, 0, len(routes)),
-	}
-	if overloadPolicy != nil {
-		snapshot.OverloadPolicy = &coakkav2.OverloadPolicy{
-			IngressMode:                     coakkav2.OverloadMode(overloadPolicy.IngressMode),
-			LocalDeliveryMode:               coakkav2.OverloadMode(overloadPolicy.LocalDeliveryMode),
-			RemoteOutboundMode:              coakkav2.OverloadMode(overloadPolicy.RemoteOutboundMode),
-			RemoteOutboundReplyReserveSlots: overloadPolicy.RemoteOutboundReplyReserveSlots,
-		}
-	}
-	for _, route := range routes {
-		endpoints := make([]*coakkav2.Endpoint, 0, len(route.Endpoints))
-		for _, endpoint := range route.Endpoints {
-			weight := endpoint.Weight
-			if weight == 0 {
-				weight = 1
-			}
-			endpoints = append(endpoints, &coakkav2.Endpoint{
-				Host:   endpoint.Host,
-				Port:   endpoint.Port,
-				Weight: weight,
-				Flags:  endpoint.Flags,
-			})
-		}
-		strategy := route.Strategy
-		if strategy == RouteStrategyUnspecified {
-			strategy = RouteStrategySingleOwner
-		}
-		snapshot.Routes = append(snapshot.Routes, &coakkav2.Route{
-			Target:       route.Target,
-			Strategy:     coakkav2.RouteResolutionStrategy(strategy),
-			RouteKeyHint: route.RouteKeyHint,
-			Flags:        route.Flags,
-			Endpoints:    endpoints,
-		})
-	}
-	payloadBytes, err := encodeRouteSnapshotPayload(snapshot)
-	if err != nil {
-		return nil, err
-	}
-	envelopeBytes, err := encodeControlEnvelope(&ControlEnvelope{
-		Seq:           seq,
-		Generation:    generation,
-		Kind:          coakkav2.ControlKind_CONTROL_KIND_APPLY_SNAPSHOT,
-		PayloadFormat: coakkav2.ConfigFormat_CONFIG_FORMAT_PROTOBUF,
-		PayloadType:   coakkav2.ControlPayloadType_CONTROL_PAYLOAD_TYPE_ROUTE_SNAPSHOT,
-		SchemaVersion: 1,
-		Payload:       payloadBytes,
-		Metadata: map[string]string{
-			"source_connector": sourceConnector,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	return envelopeBytes, nil
+	return encodeRouteSnapshotControl(generation, routes, sourceConnector, seq, overloadPolicy)
 }
 
 func (c *GoRuntimeClient) submitPendingRequest(request *Envelope, timeout time.Duration, submit func(*Envelope) error) (*Envelope, error) {
@@ -979,16 +919,16 @@ func (c *GoRuntimeClient) onRequestFrame(frame []byte) error {
 		return err
 	}
 	if c.separateDeliveredRequestLane {
-		if envelope.GetKind() != coakkav2.MessageKind_MESSAGE_KIND_REQUEST {
+		if envelope.GetKind() != MessageKindRequest {
 			return fmt.Errorf("unexpected envelope kind=%d on delivered-request lane", envelope.GetKind())
 		}
 		c.dispatchRequest(envelope)
 		return nil
 	}
 	switch envelope.GetKind() {
-	case coakkav2.MessageKind_MESSAGE_KIND_REQUEST:
+	case MessageKindRequest:
 		c.dispatchRequest(envelope)
-	case coakkav2.MessageKind_MESSAGE_KIND_RESPONSE:
+	case MessageKindResponse:
 		c.dispatchResponse(envelope)
 	default:
 		return fmt.Errorf("unexpected envelope kind=%d", envelope.GetKind())
@@ -1002,9 +942,9 @@ func (c *GoRuntimeClient) onResponseFrame(frame []byte) error {
 		return err
 	}
 	switch envelope.GetKind() {
-	case coakkav2.MessageKind_MESSAGE_KIND_RESPONSE:
+	case MessageKindResponse:
 		c.dispatchResponse(envelope)
-	case coakkav2.MessageKind_MESSAGE_KIND_REQUEST:
+	case MessageKindRequest:
 		return fmt.Errorf("unexpected request on response-only lane")
 	default:
 		return fmt.Errorf("unexpected envelope kind=%d", envelope.GetKind())
@@ -1152,7 +1092,7 @@ func (c *GoRuntimeClient) isClosed() bool {
 }
 
 func (c *GoRuntimeClient) trackRequest(request *Envelope, caller string) (*Envelope, trackedRequest, error) {
-	if request.GetKind() != coakkav2.MessageKind_MESSAGE_KIND_REQUEST {
+	if request.GetKind() != MessageKindRequest {
 		return nil, trackedRequest{}, fmt.Errorf("%s requires MESSAGE_KIND_REQUEST", caller)
 	}
 	if request.GetOneWay() {
@@ -1161,7 +1101,7 @@ func (c *GoRuntimeClient) trackRequest(request *Envelope, caller string) (*Envel
 	if request.GetMessageId() == "" {
 		return nil, trackedRequest{}, fmt.Errorf("%s requires messageId", caller)
 	}
-	normalized := protoCloneEnvelope(request)
+	normalized := cloneEnvelope(request)
 	if normalized.CorrelationId == "" {
 		normalized.CorrelationId = normalized.MessageId
 	}
@@ -1264,11 +1204,4 @@ func (c *GoRuntimeClient) publishTerminalEvent(event RequestTerminalEvent) {
 			c.statsMu.Unlock()
 		}
 	}
-}
-
-func protoCloneEnvelope(envelope *Envelope) *Envelope {
-	if envelope == nil {
-		return nil
-	}
-	return proto.Clone(envelope).(*Envelope)
 }

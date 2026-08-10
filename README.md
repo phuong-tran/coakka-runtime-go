@@ -316,8 +316,8 @@ Hot-path reading note:
 
 - False sharing is not the first-order hot-path concern in this Go layer in the
   same way it can be for native runtime internals.
-- The more likely cost centers are the `cgo` boundary, native read/write calls,
-  protobuf marshal/unmarshal work, `TerminalEvents(...)` subscriber churn, and
+- The more likely cost centers are core-runtime calls, message encoding and
+  decoding, `TerminalEvents(...)` subscriber churn, and
   goroutine handoff topology.
 - Cacheline or padding hardening should be revisited only if this layer later
   owns packed shared state, off-heap rings, or other cacheline-sensitive layout.

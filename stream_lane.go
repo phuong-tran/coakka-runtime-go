@@ -286,7 +286,8 @@ type StreamLaneSecurityConfig struct {
 }
 
 // StreamLaneConfig controls bounded workers, frames, flow control, and pressure observation.
-// Zero tuning fields select conservative native defaults.
+// Size fields are bytes, time fields are milliseconds, and zero tuning fields
+// select conservative core-runtime defaults.
 type StreamLaneConfig struct {
 	Flags                     uint32
 	BindHost                  string
@@ -335,6 +336,8 @@ type StreamSubscribeSpec struct {
 }
 
 // StreamSessionSnapshot is a copied session view with process-local monotonic timestamps.
+// Frame and byte counters are cumulative for this side; UpdateSequence advances
+// whenever retained state changes.
 type StreamSessionSnapshot struct {
 	Direction                                    StreamDirection
 	State                                        StreamState
@@ -357,6 +360,7 @@ func (s StreamSessionSnapshot) Succeeded() bool {
 }
 
 // StreamPressureSnapshot is a copied, policy-neutral transport-pressure observation.
+// Durations and timestamps are nanoseconds; ObservedDeliveryBPS is bytes per second.
 type StreamPressureSnapshot struct {
 	Direction                                         StreamDirection
 	State                                             StreamPressureState
@@ -387,7 +391,7 @@ type streamCallbackKey struct {
 type streamSourceHolder struct{ source StreamSource }
 type streamConsumerHolder struct{ consumer StreamConsumer }
 
-// StreamLane owns one independent native stream transport lane.
+// StreamLane owns one independent stream transport lane backed by the CoAkka core-runtime.
 // Callback handles remain rooted until Forget succeeds or Close joins all workers.
 type StreamLane struct {
 	bindings  *nativeBindings
@@ -456,8 +460,8 @@ func coakka_v2_go_stream_consume(context C.uintptr_t, data *C.uint8_t, frame *C.
 	return 0
 }
 
-// OpenStreamLane resolves, creates, and starts a native Stream Lane.
-// runtimeLibPath selects an explicit native library; an empty value uses the package resolver.
+// OpenStreamLane resolves, creates, and starts a Stream Lane.
+// runtimeLibPath selects an explicit core-runtime; an empty value uses package resolution.
 func OpenStreamLane(config StreamLaneConfig, runtimeLibPath string) (*StreamLane, error) {
 	if config.Flags == 0 {
 		config.Flags = StreamLanePublisher | StreamLaneSubscriber
@@ -630,8 +634,8 @@ func (l *StreamLane) Subscribe(spec StreamSubscribeSpec) error {
 	return nil
 }
 
-func validateStreamSpec(id, token string, maxFrame uint32) error {
-	if id == "" || len(id) > 64 || token == "" || len(token) > 128 {
+func validateStreamSpec(sessionID, token string, maxFrame uint32) error {
+	if sessionID == "" || len(sessionID) > 64 || token == "" || len(token) > 128 {
 		return errors.New("session ID or authorization token is empty or exceeds its byte limit")
 	}
 	if maxFrame == 0 || maxFrame > 4*1024*1024 {
@@ -641,22 +645,22 @@ func validateStreamSpec(id, token string, maxFrame uint32) error {
 }
 
 // Session returns the current copied session snapshot without waiting.
-func (l *StreamLane) Session(id string, direction StreamDirection) (StreamSessionSnapshot, error) {
-	return l.session(id, direction, 0, 0, false)
+func (l *StreamLane) Session(sessionID string, direction StreamDirection) (StreamSessionSnapshot, error) {
+	return l.session(sessionID, direction, 0, 0, false)
 }
 
 // WaitSession waits for a session update newer than afterSequence or until timeoutMillis expires.
-func (l *StreamLane) WaitSession(id string, direction StreamDirection, afterSequence uint64, timeoutMillis uint32) (StreamSessionSnapshot, error) {
-	return l.session(id, direction, afterSequence, timeoutMillis, true)
+func (l *StreamLane) WaitSession(sessionID string, direction StreamDirection, afterSequence uint64, timeoutMillis uint32) (StreamSessionSnapshot, error) {
+	return l.session(sessionID, direction, afterSequence, timeoutMillis, true)
 }
 
-func (l *StreamLane) session(id string, direction StreamDirection, sequence uint64, timeout uint32, wait bool) (StreamSessionSnapshot, error) {
+func (l *StreamLane) session(sessionID string, direction StreamDirection, sequence uint64, timeout uint32, wait bool) (StreamSessionSnapshot, error) {
 	lane, err := l.acquire()
 	if err != nil {
 		return StreamSessionSnapshot{}, err
 	}
 	defer l.release()
-	cID := C.CString(id)
+	cID := C.CString(sessionID)
 	defer C.free(unsafe.Pointer(cID))
 	native := C.coakka_v2_stream_session_snapshot_t{struct_size: C.size_t(C.sizeof_coakka_v2_stream_session_snapshot_t)}
 	var status C.int
@@ -672,22 +676,22 @@ func (l *StreamLane) session(id string, direction StreamDirection, sequence uint
 }
 
 // Pressure returns the current policy-neutral pressure snapshot without waiting.
-func (l *StreamLane) Pressure(id string, direction StreamDirection) (StreamPressureSnapshot, error) {
-	return l.pressure(id, direction, 0, 0, false)
+func (l *StreamLane) Pressure(sessionID string, direction StreamDirection) (StreamPressureSnapshot, error) {
+	return l.pressure(sessionID, direction, 0, 0, false)
 }
 
 // WaitPressure waits for a pressure update newer than afterSequence or until timeoutMillis expires.
-func (l *StreamLane) WaitPressure(id string, direction StreamDirection, afterSequence uint64, timeoutMillis uint32) (StreamPressureSnapshot, error) {
-	return l.pressure(id, direction, afterSequence, timeoutMillis, true)
+func (l *StreamLane) WaitPressure(sessionID string, direction StreamDirection, afterSequence uint64, timeoutMillis uint32) (StreamPressureSnapshot, error) {
+	return l.pressure(sessionID, direction, afterSequence, timeoutMillis, true)
 }
 
-func (l *StreamLane) pressure(id string, direction StreamDirection, sequence uint64, timeout uint32, wait bool) (StreamPressureSnapshot, error) {
+func (l *StreamLane) pressure(sessionID string, direction StreamDirection, sequence uint64, timeout uint32, wait bool) (StreamPressureSnapshot, error) {
 	lane, err := l.acquire()
 	if err != nil {
 		return StreamPressureSnapshot{}, err
 	}
 	defer l.release()
-	cID := C.CString(id)
+	cID := C.CString(sessionID)
 	defer C.free(unsafe.Pointer(cID))
 	n := C.coakka_v2_stream_pressure_snapshot_t{struct_size: C.size_t(C.sizeof_coakka_v2_stream_pressure_snapshot_t)}
 	var status C.int
@@ -703,22 +707,22 @@ func (l *StreamLane) pressure(id string, direction StreamDirection, sequence uin
 }
 
 // Cancel requests cooperative cancellation; observe terminal state before Forget.
-func (l *StreamLane) Cancel(id string, direction StreamDirection) error {
-	return l.control(id, direction, false)
+func (l *StreamLane) Cancel(sessionID string, direction StreamDirection) error {
+	return l.control(sessionID, direction, false)
 }
 
 // Forget releases a terminal record and its callback handle.
-func (l *StreamLane) Forget(id string, direction StreamDirection) error {
-	return l.control(id, direction, true)
+func (l *StreamLane) Forget(sessionID string, direction StreamDirection) error {
+	return l.control(sessionID, direction, true)
 }
 
-func (l *StreamLane) control(id string, direction StreamDirection, forget bool) error {
+func (l *StreamLane) control(sessionID string, direction StreamDirection, forget bool) error {
 	lane, err := l.acquire()
 	if err != nil {
 		return err
 	}
 	defer l.release()
-	cID := C.CString(id)
+	cID := C.CString(sessionID)
 	defer C.free(unsafe.Pointer(cID))
 	var status C.int
 	if forget {
@@ -731,7 +735,7 @@ func (l *StreamLane) control(id string, direction StreamDirection, forget bool) 
 	}
 	if forget {
 		l.mu.Lock()
-		key := streamCallbackKey{id, direction}
+		key := streamCallbackKey{sessionID, direction}
 		if handle, ok := l.callbacks[key]; ok {
 			handle.Delete()
 			delete(l.callbacks, key)
