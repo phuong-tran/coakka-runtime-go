@@ -32,6 +32,18 @@ typedef struct {
 
 typedef struct {
   size_t struct_size;
+  uint64_t fields;
+  uint32_t mode;
+  uint32_t reserved;
+  const char *bind_host;
+  const char *advertise_host;
+  uint16_t bind_port;
+  uint16_t advertise_port;
+  uint32_t reserved2;
+} coakka_v2_network_options_t;
+
+typedef struct {
+  size_t struct_size;
   uint32_t abi_version;
   uint32_t feature_flags;
   const char *runtime_version;
@@ -485,6 +497,7 @@ typedef int (*coakka_v2_runtime_get_config_fn)(coakka_v2_runtime_t *rt, coakka_v
 typedef int (*coakka_v2_runtime_get_capabilities_fn)(coakka_v2_runtime_capability_snapshot_t *out_capabilities);
 typedef coakka_v2_runtime_t *(*coakka_v2_runtime_create_fn)(const coakka_v2_runtime_config_t *cfg);
 typedef void (*coakka_v2_runtime_destroy_fn)(coakka_v2_runtime_t *rt);
+typedef int (*coakka_v2_runtime_apply_network_options_fn)(coakka_v2_runtime_t *rt, const coakka_v2_network_options_t *options);
 typedef int (*coakka_v2_runtime_get_host_handles_fn)(coakka_v2_runtime_t *rt, coakka_v2_host_handles_t *out_handles);
 typedef int (*coakka_v2_runtime_start_fn)(coakka_v2_runtime_t *rt);
 typedef int (*coakka_v2_runtime_stop_fn)(coakka_v2_runtime_t *rt);
@@ -534,6 +547,7 @@ typedef struct coakka_v2_go_bindings_t {
   coakka_v2_runtime_get_capabilities_fn get_capabilities;
   coakka_v2_runtime_create_fn create_runtime;
   coakka_v2_runtime_destroy_fn destroy_runtime;
+  coakka_v2_runtime_apply_network_options_fn apply_network_options;
   coakka_v2_runtime_get_host_handles_fn get_host_handles;
   coakka_v2_runtime_start_fn start_runtime;
   coakka_v2_runtime_stop_fn stop_runtime;
@@ -717,6 +731,7 @@ static coakka_v2_go_bindings_t *coakka_v2_go_open_library(const char *path, char
       coakka_v2_go_load_symbol(handle, (void **)&bindings->get_capabilities, "coakka_v2_runtime_get_capabilities", error_out) != 0 ||
       coakka_v2_go_load_symbol(handle, (void **)&bindings->create_runtime, "coakka_v2_runtime_create", error_out) != 0 ||
       coakka_v2_go_load_symbol(handle, (void **)&bindings->destroy_runtime, "coakka_v2_runtime_destroy", error_out) != 0 ||
+      coakka_v2_go_load_symbol(handle, (void **)&bindings->apply_network_options, "coakka_v2_runtime_apply_network_options", error_out) != 0 ||
       coakka_v2_go_load_symbol(handle, (void **)&bindings->get_host_handles, "coakka_v2_runtime_get_host_handles", error_out) != 0 ||
       coakka_v2_go_load_symbol(handle, (void **)&bindings->start_runtime, "coakka_v2_runtime_start", error_out) != 0 ||
       coakka_v2_go_load_symbol(handle, (void **)&bindings->stop_runtime, "coakka_v2_runtime_stop", error_out) != 0 ||
@@ -804,6 +819,10 @@ static coakka_v2_runtime_t *coakka_v2_go_create_runtime(coakka_v2_go_bindings_t 
 
 static void coakka_v2_go_destroy_runtime(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt) {
   bindings->destroy_runtime(rt);
+}
+
+static int coakka_v2_go_apply_network_options(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, const coakka_v2_network_options_t *options) {
+  return bindings->apply_network_options(rt, options);
 }
 
 static int coakka_v2_go_get_host_handles(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_host_handles_t *out_handles) {
@@ -1317,6 +1336,36 @@ func (b *nativeBindings) destroyRuntime(runtime nativeRuntime) {
 	if runtime != nil {
 		C.coakka_v2_go_destroy_runtime(b.ptr, (*C.coakka_v2_runtime_t)(runtime))
 	}
+}
+
+func (b *nativeBindings) applyNetworkOptions(runtime nativeRuntime, network RuntimeNetworkConfig) error {
+	var bindHost *C.char
+	var advertiseHost *C.char
+	if network.BindHost != "" {
+		bindHost = C.CString(network.BindHost)
+		defer C.free(unsafe.Pointer(bindHost))
+	}
+	if network.AdvertiseHost != "" {
+		advertiseHost = C.CString(network.AdvertiseHost)
+		defer C.free(unsafe.Pointer(advertiseHost))
+	}
+	fields := uint64(0x01)
+	if network.Mode == RuntimeNetworkNode {
+		fields = 0x1f
+	}
+	options := C.coakka_v2_network_options_t{
+		struct_size:    C.size_t(C.sizeof_coakka_v2_network_options_t),
+		fields:         C.uint64_t(fields),
+		mode:           C.uint32_t(network.Mode),
+		bind_host:      bindHost,
+		advertise_host: advertiseHost,
+		bind_port:      C.uint16_t(network.BindPort),
+		advertise_port: C.uint16_t(network.AdvertisePort),
+	}
+	return requireStatus(
+		C.coakka_v2_go_apply_network_options(b.ptr, (*C.coakka_v2_runtime_t)(runtime), &options),
+		"runtime_apply_network_options",
+	)
 }
 
 func (b *nativeBindings) getHostHandles(runtime nativeRuntime, flags uint32) (HostHandlesSnapshot, error) {

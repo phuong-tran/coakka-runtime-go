@@ -1,5 +1,16 @@
 # Go Connector Release Notes
 
+## v1.7.0
+
+Publishes connector version `2.4.0` with exact native generation
+`2.4.0+c2f53117` for all five supported OS/CPU payloads. Runtime startup now
+uses an explicit network participation mode: `EMBEDDED` and `OUTBOUND_ONLY`
+do not open a listener, while `NETWORK_NODE` requires explicit bind and
+advertise endpoints and fails closed when bind fails. File Lane and Stream
+Lane remain available through the same bounded, lifecycle-owned connector
+surface. The module remains on semantic major `v1` because its public path has
+no `/v2` suffix.
+
 ## v1.6.0
 
 Adds concurrent-safe Stream Lane bindings with `runtime/cgo.Handle` callback

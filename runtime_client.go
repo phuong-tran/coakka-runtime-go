@@ -115,6 +115,7 @@ type GoRuntimeClient struct {
 }
 
 func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRuntimeClient, error) {
+	config.Network = config.Network.Normalized()
 	if err := config.RequireValid(); err != nil {
 		return nil, err
 	}
@@ -143,6 +144,11 @@ func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRunti
 		deadletterSubscribers:            make(map[uint64]chan ObservedDeadletter),
 		monitorSignalCh:                  make(chan uint64, 64),
 		closedCh:                         make(chan struct{}),
+	}
+	if err := bindings.applyNetworkOptions(runtime, config.Network); err != nil {
+		bindings.destroyRuntime(runtime)
+		bindings.close()
+		return nil, err
 	}
 	if config.ConnectionStrategy != nil {
 		result, applyErr := bindings.applyTCPConnectionStrategy(runtime, *config.ConnectionStrategy)

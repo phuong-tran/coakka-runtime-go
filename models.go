@@ -419,7 +419,7 @@ func LocalRoute(target string, port uint32) RouteSpec {
 }
 
 func LocalRouteDefault(target string) RouteSpec {
-	return LocalRoute(target, 9001)
+	return LocalRoute(target, 0)
 }
 
 func (r RouteSpec) RequireValid() error {
@@ -437,6 +437,74 @@ type RuntimeOverloadPolicy struct {
 	LocalDeliveryMode               OverloadMode
 	RemoteOutboundMode              OverloadMode
 	RemoteOutboundReplyReserveSlots uint32
+}
+
+type RuntimeNetworkMode uint32
+
+const (
+	RuntimeNetworkEmbedded     RuntimeNetworkMode = 1
+	RuntimeNetworkOutboundOnly RuntimeNetworkMode = 2
+	RuntimeNetworkNode         RuntimeNetworkMode = 3
+)
+
+type RuntimeNetworkConfig struct {
+	Mode          RuntimeNetworkMode
+	BindHost      string
+	BindPort      uint16
+	AdvertiseHost string
+	AdvertisePort uint16
+}
+
+func EmbeddedNetwork() RuntimeNetworkConfig {
+	return RuntimeNetworkConfig{Mode: RuntimeNetworkEmbedded}
+}
+
+func OutboundOnlyNetwork() RuntimeNetworkConfig {
+	return RuntimeNetworkConfig{Mode: RuntimeNetworkOutboundOnly}
+}
+
+func NetworkNode(bindHost string, bindPort uint16, advertiseHost string, advertisePort uint16) RuntimeNetworkConfig {
+	if advertisePort == 0 {
+		advertisePort = bindPort
+	}
+	return RuntimeNetworkConfig{
+		Mode:          RuntimeNetworkNode,
+		BindHost:      bindHost,
+		BindPort:      bindPort,
+		AdvertiseHost: advertiseHost,
+		AdvertisePort: advertisePort,
+	}
+}
+
+func (n RuntimeNetworkConfig) Normalized() RuntimeNetworkConfig {
+	if n.Mode == 0 {
+		return EmbeddedNetwork()
+	}
+	return n
+}
+
+func (n RuntimeNetworkConfig) RequireValid() error {
+	n = n.Normalized()
+	if n.Mode == RuntimeNetworkNode {
+		if strings.TrimSpace(n.BindHost) == "" || n.BindPort == 0 {
+			return fmt.Errorf("network node requires bind host and port")
+		}
+		if strings.TrimSpace(n.AdvertiseHost) == "" || n.AdvertisePort == 0 {
+			return fmt.Errorf("network node requires advertise host and port")
+		}
+		switch n.AdvertiseHost {
+		case "0.0.0.0", "::", "[::]", "::0":
+			return fmt.Errorf("network node advertise host must not be wildcard")
+		}
+		return nil
+	}
+	if n.Mode != RuntimeNetworkEmbedded && n.Mode != RuntimeNetworkOutboundOnly {
+		return fmt.Errorf("unknown runtime network mode: %d", n.Mode)
+	}
+	if n.BindHost != "" || n.BindPort != 0 || n.AdvertiseHost != "" || n.AdvertisePort != 0 {
+		return fmt.Errorf("runtime network mode %d does not accept or advertise a listener", n.Mode)
+	}
+	return nil
 }
 
 func (p RuntimeOverloadPolicy) RequireValid() error {
@@ -461,6 +529,7 @@ type ConnectorConfig struct {
 	OverloadPolicy               *RuntimeOverloadPolicy
 	ConnectionStrategy           *RuntimeTCPConnectionStrategySpec
 	Security                     *RuntimeTCPSecuritySpec
+	Network                      RuntimeNetworkConfig
 }
 
 func (c ConnectorConfig) RequireValid() error {
@@ -480,6 +549,9 @@ func (c ConnectorConfig) RequireValid() error {
 		if err := c.OverloadPolicy.RequireValid(); err != nil {
 			return err
 		}
+	}
+	if err := c.Network.RequireValid(); err != nil {
+		return err
 	}
 	if len(c.Routes) == 0 {
 		return fmt.Errorf("connector config requires at least one route")
@@ -505,6 +577,7 @@ type ConnectorStartSpec struct {
 	OverloadPolicy                      *RuntimeOverloadPolicy
 	ConnectionStrategy                  *RuntimeTCPConnectionStrategySpec
 	Security                            *RuntimeTCPSecuritySpec
+	Network                             RuntimeNetworkConfig
 }
 
 func (s ConnectorStartSpec) ToConnectorConfig() ConnectorConfig {
@@ -521,6 +594,7 @@ func (s ConnectorStartSpec) ToConnectorConfig() ConnectorConfig {
 		OverloadPolicy:               normalized.OverloadPolicy,
 		ConnectionStrategy:           normalized.ConnectionStrategy,
 		Security:                     normalized.Security,
+		Network:                      normalized.Network,
 	}
 }
 
@@ -532,6 +606,7 @@ func (s ConnectorStartSpec) Normalized() ConnectorStartSpec {
 	if out.Generation == 0 {
 		out.Generation = 1
 	}
+	out.Network = out.Network.Normalized()
 	if !out.EnableMonitor {
 		out.EnableMonitor = true
 	}
