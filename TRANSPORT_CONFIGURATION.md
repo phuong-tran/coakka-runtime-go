@@ -101,8 +101,9 @@ immutable TLS context. It never returns secret paths or bytes through public
 snapshots.
 
 See the canonical [TLS/mTLS guide](https://github.com/phuong-tran/coakka-publish/blob/main/docs/tls-and-mtls.md)
-for Kubernetes ingress/service-mesh guidance, controlled networks, LAN/edge,
-RPi, BeagleBone, bare metal, industrial Android, and rotation semantics.
+for direct runtime TLS/mTLS without a service-mesh data plane, Kubernetes,
+controlled networks, LAN/edge, RPi, BeagleBone, bare metal, industrial Android,
+and rotation semantics.
 
 ## Errors, Platforms, And Troubleshooting
 
