@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.7.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.7.0)
-[![Release](https://img.shields.io/badge/release-v1.7.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/tree/v1.7.0)
+[![Version](https://img.shields.io/badge/version-v1.7.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.7.0)
+[![Release](https://img.shields.io/badge/release-v1.7.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.7.0)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
