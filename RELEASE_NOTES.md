@@ -1,5 +1,19 @@
 # Go Connector Release Notes
 
+## v1.7.1
+
+Lowers the module compatibility floor from Go `1.23.0` to Go `1.22`, the
+minimum required by `google.golang.org/protobuf v1.36.6`. The package and
+JVM-Go demo pass module-tidy and source tests with both Go `1.22.12` and the
+current stable toolchain. The demo no longer retains an unused
+`golang.org/x/sys` dependency that raised its floor to Go 1.23.
+
+This patch keeps connector version `2.4.0`, native generation
+`2.4.0+c2f53117`, the public Go API, runtime ABI, lifecycle, bounded queues,
+transport behavior, and all five native payloads unchanged. Go `1.22` is a
+compatibility floor, not a recommendation to run an unsupported toolchain in
+production; use a currently supported Go release for production builds.
+
 ## v1.7.0
 
 Publishes connector version `2.4.0` with exact native generation

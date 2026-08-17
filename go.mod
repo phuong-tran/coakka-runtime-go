@@ -1,5 +1,5 @@
 module github.com/phuong-tran/coakka-runtime-go
 
-go 1.23.0
+go 1.22
 
 require google.golang.org/protobuf v1.36.6

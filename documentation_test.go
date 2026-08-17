@@ -29,6 +29,30 @@ func TestReadmeUsesPublicFileLaneContract(t *testing.T) {
 	}
 }
 
+func TestGoCompatibilityFloorAndCurrentToolchainCI(t *testing.T) {
+	module, err := os.ReadFile("go.mod")
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	if !strings.Contains(string(module), "\ngo 1.22\n") {
+		t.Fatal("go.mod must retain the tested Go 1.22 compatibility floor")
+	}
+
+	workflow, err := os.ReadFile(filepath.Join(".github", "workflows", "go-ci.yml"))
+	if err != nil {
+		t.Fatalf("read go-ci workflow: %v", err)
+	}
+	text := string(workflow)
+	for _, required := range []string{"\"1.22.12\"", "- stable"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("go-ci workflow is missing toolchain matrix entry %q", required)
+		}
+	}
+	if strings.Contains(text, "go-version-file: go.mod") {
+		t.Fatal("go-ci must not conflate the module compatibility floor with the current CI toolchain")
+	}
+}
+
 func TestRootAPIDoesNotExposeWireCodecTypes(t *testing.T) {
 	if _, err := os.Stat(filepath.Join("coakka", "v2")); !os.IsNotExist(err) {
 		t.Fatalf("generated wire package must not be public: %v", err)

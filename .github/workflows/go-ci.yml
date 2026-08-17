@@ -12,9 +12,15 @@ permissions:
 
 jobs:
   test:
-    name: go test and package surface
+    name: go ${{ matrix.go-version }} test and package surface
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version:
+          - "1.22.12"
+          - stable
     steps:
       - name: Check out module
         uses: actions/checkout@v6
@@ -22,7 +28,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go-version }}
+
+      - name: Check module metadata
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
 
       - name: Test
         run: go test ./...
