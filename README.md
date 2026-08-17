@@ -297,10 +297,12 @@ Native runtime resolution order:
 
 The package includes target-specific native libraries for macOS ARM64, Linux
 ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.7.1`
-request/reply passes on macOS ARM64 and Linux ARM64/x86-64. All five native
-digests and binary formats match release metadata. Both Windows payloads pass
-package, export, dependency, and digest gates; matching Go-on-Windows execution
-is not recorded for this release. See
+request/reply passes on macOS ARM64. Linux x86-64 CI verifies the module with
+Go `1.22.12` and current stable Go; unchanged native generation
+`2.4.0+c2f53117` retains its earlier Linux ARM64/x86-64 matching-host runtime
+evidence. All five native digests and binary formats match release metadata.
+Both Windows payloads pass package, export, dependency, and digest gates;
+matching Go-on-Windows execution is not recorded for this release. See
 [Troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
 for OS/CPU selection, dependencies, Gatekeeper, Authenticode, digests, and the
 currently absent publisher signing.
