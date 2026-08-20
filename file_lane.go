@@ -145,6 +145,27 @@ type FileSendSpec struct {
 	TimeoutMillis      uint32
 }
 
+// FileReceiveGrant is a receiver-issued capability pinned to one prepared replica.
+// The authorization token may be reused only for this transfer's bounded resume and
+// idempotent completed-status handling while the receiver retains its record.
+type FileReceiveGrant struct {
+	Owner              LaneOwnerEndpoint
+	TransferID         string
+	AuthorizationToken string
+	ExpectedSize       uint64
+	ExpectedSHA256     [32]byte
+}
+
+// ToSendSpec creates a sender job using the exact owner endpoint in this grant.
+func (g FileReceiveGrant) ToSendSpec(sourcePath string, timeoutMillis uint32) FileSendSpec {
+	return FileSendSpec{TransferID: g.TransferID, AuthorizationToken: g.AuthorizationToken, RemoteHost: g.Owner.AdvertisedHost, RemotePort: g.Owner.Port, SourcePath: sourcePath, ExpectedSize: g.ExpectedSize, ExpectedSHA256: g.ExpectedSHA256, TimeoutMillis: timeoutMillis}
+}
+
+// String deliberately redacts the bearer token.
+func (g FileReceiveGrant) String() string {
+	return fmt.Sprintf("FileReceiveGrant{Owner:%v TransferID:%q AuthorizationToken:<redacted> ExpectedSize:%d}", g.Owner, g.TransferID, g.ExpectedSize)
+}
+
 // FileDigest contains a file's SHA-256 and exact byte count.
 type FileDigest struct {
 	SHA256 [32]byte
@@ -189,10 +210,23 @@ type FileLane struct {
 	drained  *sync.Cond
 	closing  bool
 	active   int
+	owned    bool
 }
 
 // OpenFileLane opens and starts a lane using the selected native runtime.
 func OpenFileLane(config FileLaneConfig, runtimeLibPath string) (*FileLane, error) {
+	return openFileLane(config, LaneOwnerConfig{}, runtimeLibPath, false)
+}
+
+// OpenOwnedFileLane starts a lane that can issue replica-pinned receive grants.
+func OpenOwnedFileLane(config FileLaneConfig, owner LaneOwnerConfig, runtimeLibPath string) (*FileLane, error) {
+	if err := owner.validate(); err != nil {
+		return nil, err
+	}
+	return openFileLane(config, owner, runtimeLibPath, true)
+}
+
+func openFileLane(config FileLaneConfig, owner LaneOwnerConfig, runtimeLibPath string, owned bool) (*FileLane, error) {
 	config = config.normalized()
 	if err := config.validate(); err != nil {
 		return nil, err
@@ -209,7 +243,16 @@ func OpenFileLane(config FileLaneConfig, runtimeLibPath string) (*FileLane, erro
 		bindings.close()
 		return nil, errors.New("native runtime does not export file-lane ABI; install the next runtime native release")
 	}
-	lane, err := bindings.createFileLane(config)
+	var lane nativeFileLane
+	if owned {
+		if err := bindings.loadFileOwnerGrants(); err != nil {
+			bindings.close()
+			return nil, err
+		}
+		lane, err = bindings.createOwnedFileLane(config, owner)
+	} else {
+		lane, err = bindings.createFileLane(config)
+	}
 	if err != nil {
 		bindings.close()
 		return nil, err
@@ -219,7 +262,7 @@ func OpenFileLane(config FileLaneConfig, runtimeLibPath string) (*FileLane, erro
 		bindings.close()
 		return nil, err
 	}
-	result := &FileLane{bindings: bindings, lane: lane}
+	result := &FileLane{bindings: bindings, lane: lane, owned: owned}
 	result.drained = sync.NewCond(&result.mu)
 	return result, nil
 }
@@ -276,6 +319,19 @@ func (l *FileLane) PrepareReceive(spec FileReceiveSpec) error {
 	}
 	defer l.release()
 	return l.bindings.prepareFileReceive(lane, spec)
+}
+
+// PrepareReceiveGrant prepares one receive and returns its exact owner capability.
+func (l *FileLane) PrepareReceiveGrant(spec FileReceiveSpec) (FileReceiveGrant, error) {
+	if !l.owned {
+		return FileReceiveGrant{}, errors.New("file lane was not opened with OpenOwnedFileLane")
+	}
+	lane, err := l.acquire()
+	if err != nil {
+		return FileReceiveGrant{}, err
+	}
+	defer l.release()
+	return l.bindings.prepareFileReceiveGrant(lane, spec)
 }
 
 // SubmitSend queues a send after the remote application prepares the receive.

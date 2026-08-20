@@ -1,5 +1,13 @@
 # Go Connector Release Notes
 
+## v1.8.2
+
+Publishes connector version `2.5.2` with typed File and Stream Lane owner
+grants, control-plane reconstruction, exact-owner endpoint pinning, and live
+owner-aware tests. The release also adds a runnable multi-replica File Lane
+fan-out sample. Native generation
+`2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a` is unchanged.
+
 ## v1.8.1
 
 Publishes connector version `2.5.1`, corrects public documentation, and adopts

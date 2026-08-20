@@ -51,6 +51,36 @@ typedef struct {
 
 typedef struct {
   size_t struct_size;
+  const char *owner_instance_id;
+  const char *advertised_host;
+} coakka_v2_lane_owner_config_t;
+
+typedef struct {
+  size_t struct_size;
+  uint16_t port;
+  uint16_t reserved;
+  char owner_instance_id[128];
+  char advertised_host[256];
+} coakka_v2_lane_owner_endpoint_t;
+
+typedef struct {
+  size_t struct_size;
+  coakka_v2_stream_lane_config_t lane;
+  coakka_v2_lane_owner_config_t owner;
+} coakka_v2_stream_lane_owned_config_t;
+
+typedef struct {
+  size_t struct_size;
+  coakka_v2_lane_owner_endpoint_t owner;
+  char session_id[65];
+  char authorization_token[129];
+  uint64_t format_id;
+  uint32_t max_frame_bytes;
+  uint32_t reserved;
+} coakka_v2_stream_publish_grant_t;
+
+typedef struct {
+  size_t struct_size;
   uint32_t direction;
   uint32_t state;
   uint32_t result;
@@ -113,12 +143,15 @@ typedef struct {
 } coakka_v2_stream_lane_stats_t;
 
 int coakka_v2_go_stream_lane_available(coakka_v2_go_bindings_t *);
+int coakka_v2_go_load_stream_owner_grants(coakka_v2_go_bindings_t *, char **);
 int coakka_v2_go_stream_lane_create_ex(coakka_v2_go_bindings_t *, const coakka_v2_stream_lane_config_t *, coakka_v2_stream_lane_t **);
+int coakka_v2_go_stream_lane_create_owned_ex(coakka_v2_go_bindings_t *, const coakka_v2_stream_lane_owned_config_t *, coakka_v2_stream_lane_t **);
 void coakka_v2_go_stream_lane_destroy(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *);
 int coakka_v2_go_stream_lane_start(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *);
 int coakka_v2_go_stream_lane_stop(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *);
 int coakka_v2_go_stream_lane_get_bound_port(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, uint16_t *);
 int coakka_v2_go_stream_lane_prepare_publish(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, const char *, uint64_t, uint32_t, uintptr_t);
+int coakka_v2_go_stream_lane_prepare_publish_grant(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, const char *, uint64_t, uint32_t, uintptr_t, coakka_v2_stream_publish_grant_t *);
 int coakka_v2_go_stream_lane_subscribe(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, const char *, const char *, uint16_t, uint64_t, uint32_t, uint32_t, uint32_t, uintptr_t);
 int coakka_v2_go_stream_lane_get_session(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_session_snapshot_t *);
 int coakka_v2_go_stream_lane_wait_session(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_session_snapshot_t *);
@@ -335,6 +368,26 @@ type StreamSubscribeSpec struct {
 	Consumer           StreamConsumer
 }
 
+// StreamPublishGrant is a single-admission capability pinned to one publisher replica.
+// The first valid OPEN consumes it; retry requires a fresh prepare and grant.
+type StreamPublishGrant struct {
+	Owner              LaneOwnerEndpoint
+	SessionID          string
+	AuthorizationToken string
+	FormatID           uint64
+	MaxFrameBytes      uint32
+}
+
+// ToSubscribeSpec creates a subscriber job using the exact owner endpoint.
+func (g StreamPublishGrant) ToSubscribeSpec(consumer StreamConsumer, initialWindowBytes, timeoutMillis uint32) StreamSubscribeSpec {
+	return StreamSubscribeSpec{SessionID: g.SessionID, AuthorizationToken: g.AuthorizationToken, RemoteHost: g.Owner.AdvertisedHost, RemotePort: g.Owner.Port, FormatID: g.FormatID, MaxFrameBytes: g.MaxFrameBytes, InitialWindowBytes: initialWindowBytes, TimeoutMillis: timeoutMillis, Consumer: consumer}
+}
+
+// String deliberately redacts the bearer token.
+func (g StreamPublishGrant) String() string {
+	return fmt.Sprintf("StreamPublishGrant{Owner:%v SessionID:%q AuthorizationToken:<redacted> FormatID:%d MaxFrameBytes:%d}", g.Owner, g.SessionID, g.FormatID, g.MaxFrameBytes)
+}
+
 // StreamSessionSnapshot is a copied session view with process-local monotonic timestamps.
 // Frame and byte counters are cumulative for this side; UpdateSequence advances
 // whenever retained state changes.
@@ -401,6 +454,7 @@ type StreamLane struct {
 	closing   bool
 	active    int
 	callbacks map[streamCallbackKey]cgo.Handle
+	owned     bool
 }
 
 type nativeStreamLane unsafe.Pointer
@@ -463,6 +517,18 @@ func coakka_v2_go_stream_consume(context C.uintptr_t, data *C.uint8_t, frame *C.
 // OpenStreamLane resolves, creates, and starts a Stream Lane.
 // runtimeLibPath selects an explicit core-runtime; an empty value uses package resolution.
 func OpenStreamLane(config StreamLaneConfig, runtimeLibPath string) (*StreamLane, error) {
+	return openStreamLane(config, LaneOwnerConfig{}, runtimeLibPath, false)
+}
+
+// OpenOwnedStreamLane starts a lane that can issue replica-pinned publish grants.
+func OpenOwnedStreamLane(config StreamLaneConfig, owner LaneOwnerConfig, runtimeLibPath string) (*StreamLane, error) {
+	if err := owner.validate(); err != nil {
+		return nil, err
+	}
+	return openStreamLane(config, owner, runtimeLibPath, true)
+}
+
+func openStreamLane(config StreamLaneConfig, owner LaneOwnerConfig, runtimeLibPath string, owned bool) (*StreamLane, error) {
 	if config.Flags == 0 {
 		config.Flags = StreamLanePublisher | StreamLaneSubscriber
 	}
@@ -489,7 +555,16 @@ func OpenStreamLane(config StreamLaneConfig, runtimeLibPath string) (*StreamLane
 		bindings.close()
 		return nil, errors.New("native runtime does not export the complete stream-lane ABI")
 	}
-	lane, err := bindings.createStreamLane(config)
+	var lane nativeStreamLane
+	if owned {
+		if err := bindings.loadStreamOwnerGrants(); err != nil {
+			bindings.close()
+			return nil, err
+		}
+		lane, err = bindings.createOwnedStreamLane(config, owner)
+	} else {
+		lane, err = bindings.createStreamLane(config)
+	}
 	if err != nil {
 		bindings.close()
 		return nil, err
@@ -499,9 +574,27 @@ func OpenStreamLane(config StreamLaneConfig, runtimeLibPath string) (*StreamLane
 		bindings.close()
 		return nil, err
 	}
-	result := &StreamLane{bindings: bindings, lane: lane, callbacks: make(map[streamCallbackKey]cgo.Handle)}
+	result := &StreamLane{bindings: bindings, lane: lane, callbacks: make(map[streamCallbackKey]cgo.Handle), owned: owned}
 	result.drained = sync.NewCond(&result.mu)
 	return result, nil
+}
+
+func (b *nativeBindings) loadStreamOwnerGrants() error {
+	if err := requireLaneOwnerGrants(b); err != nil {
+		return err
+	}
+	var cError *C.char
+	status := C.coakka_v2_go_load_stream_owner_grants(b.ptr, &cError)
+	if cError != nil {
+		defer C.free(unsafe.Pointer(cError))
+	}
+	if status != 0 {
+		if cError != nil {
+			return fmt.Errorf("load stream owner-grant ABI: %s", C.GoString(cError))
+		}
+		return errors.New("load stream owner-grant ABI")
+	}
+	return nil
 }
 
 func (b *nativeBindings) createStreamLane(config StreamLaneConfig) (nativeStreamLane, error) {
@@ -543,6 +636,49 @@ func (b *nativeBindings) createStreamLane(config StreamLaneConfig) (nativeStream
 	return nativeStreamLane(unsafe.Pointer(lane)), nil
 }
 
+func (b *nativeBindings) createOwnedStreamLane(config StreamLaneConfig, owner LaneOwnerConfig) (nativeStreamLane, error) {
+	bind, ownerID, advertisedHost := C.CString(config.BindHost), C.CString(owner.OwnerInstanceID), C.CString(owner.AdvertisedHost)
+	defer C.free(unsafe.Pointer(bind))
+	defer C.free(unsafe.Pointer(ownerID))
+	defer C.free(unsafe.Pointer(advertisedHost))
+	var security *C.coakka_v2_stream_lane_security_config_t
+	var nativeSecurity C.coakka_v2_stream_lane_security_config_t
+	var values []*C.char
+	if config.Security != nil {
+		for _, value := range []string{config.Security.CredentialID, config.Security.CACertificateFile, config.Security.IdentityCertificateFile, config.Security.PrivateKeyFile} {
+			values = append(values, C.CString(value))
+		}
+		defer func() {
+			for _, value := range values {
+				C.free(unsafe.Pointer(value))
+			}
+		}()
+		nativeSecurity = C.coakka_v2_stream_lane_security_config_t{
+			struct_size: C.size_t(C.sizeof_coakka_v2_stream_lane_security_config_t), mode: C.uint32_t(config.Security.Mode),
+			credential_generation: C.uint64_t(config.Security.CredentialGeneration), credential_id: values[0],
+			ca_certificate_file: values[1], identity_certificate_file: values[2], private_key_file: values[3],
+		}
+		security = &nativeSecurity
+	}
+	nativeLane := C.coakka_v2_stream_lane_config_t{
+		struct_size: C.size_t(C.sizeof_coakka_v2_stream_lane_config_t), flags: C.uint32_t(config.Flags), bind_host: bind,
+		bind_port: C.uint16_t(config.BindPort), capacity: C.size_t(config.Capacity), max_frame_bytes: C.uint32_t(config.MaxFrameBytes),
+		max_window_bytes: C.uint32_t(config.MaxWindowBytes), io_timeout_ms: C.uint32_t(config.IOTimeoutMillis),
+		source_retry_ms: C.uint32_t(config.SourceRetryMillis), progress_frames: C.uint32_t(config.ProgressFrames),
+		progress_interval_ms: C.uint32_t(config.ProgressIntervalMillis), publisher_worker_count: C.uint32_t(config.PublisherWorkerCount),
+		subscriber_worker_count: C.uint32_t(config.SubscriberWorkerCount), security: security, pressure_after_ms: C.uint32_t(config.PressureAfterMillis),
+		stalled_after_ms: C.uint32_t(config.StalledAfterMillis), recovery_after_ms: C.uint32_t(config.RecoveryAfterMillis),
+		pressure_observation_ms: C.uint32_t(config.PressureObservationMillis),
+	}
+	nativeOwner := C.coakka_v2_lane_owner_config_t{struct_size: C.size_t(C.sizeof_coakka_v2_lane_owner_config_t), owner_instance_id: ownerID, advertised_host: advertisedHost}
+	ownedConfig := C.coakka_v2_stream_lane_owned_config_t{struct_size: C.size_t(C.sizeof_coakka_v2_stream_lane_owned_config_t), lane: nativeLane, owner: nativeOwner}
+	var lane *C.coakka_v2_stream_lane_t
+	if err := requireStatus(C.coakka_v2_go_stream_lane_create_owned_ex(b.ptr, &ownedConfig, &lane), "stream_lane_create_owned"); err != nil {
+		return nil, err
+	}
+	return nativeStreamLane(unsafe.Pointer(lane)), nil
+}
+
 func (l *StreamLane) acquire() (nativeStreamLane, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -576,30 +712,56 @@ func (l *StreamLane) BoundPort() (uint16, error) {
 
 // PreparePublish authorizes one session and roots source until Forget or Close.
 func (l *StreamLane) PreparePublish(spec StreamPublishSpec) error {
+	_, err := l.preparePublish(spec, false)
+	return err
+}
+
+// PreparePublishGrant prepares a source and returns a single-admission capability
+// containing this publisher replica's exact endpoint.
+func (l *StreamLane) PreparePublishGrant(spec StreamPublishSpec) (StreamPublishGrant, error) {
+	if !l.owned {
+		return StreamPublishGrant{}, errors.New("stream lane was not opened with OpenOwnedStreamLane")
+	}
+	return l.preparePublish(spec, true)
+}
+
+func (l *StreamLane) preparePublish(spec StreamPublishSpec, grantRequested bool) (StreamPublishGrant, error) {
 	if err := validateStreamSpec(spec.SessionID, spec.AuthorizationToken, spec.MaxFrameBytes); err != nil {
-		return err
+		return StreamPublishGrant{}, err
 	}
 	if spec.Source == nil {
-		return errors.New("stream source is required")
+		return StreamPublishGrant{}, errors.New("stream source is required")
 	}
 	lane, err := l.acquire()
 	if err != nil {
-		return err
+		return StreamPublishGrant{}, err
 	}
 	defer l.release()
 	handle := cgo.NewHandle(&streamSourceHolder{source: spec.Source})
 	id, token := C.CString(spec.SessionID), C.CString(spec.AuthorizationToken)
 	defer C.free(unsafe.Pointer(id))
 	defer C.free(unsafe.Pointer(token))
-	err = requireStatus(C.coakka_v2_go_stream_lane_prepare_publish(l.bindings.ptr, (*C.coakka_v2_stream_lane_t)(lane), id, token, C.uint64_t(spec.FormatID), C.uint32_t(spec.MaxFrameBytes), C.uintptr_t(handle)), "stream_lane_prepare_publish")
+	var nativeGrant C.coakka_v2_stream_publish_grant_t
+	if grantRequested {
+		nativeGrant.struct_size = C.size_t(C.sizeof_coakka_v2_stream_publish_grant_t)
+		err = requireStatus(C.coakka_v2_go_stream_lane_prepare_publish_grant(l.bindings.ptr, (*C.coakka_v2_stream_lane_t)(lane), id, token, C.uint64_t(spec.FormatID), C.uint32_t(spec.MaxFrameBytes), C.uintptr_t(handle), &nativeGrant), "stream_lane_prepare_publish_grant")
+	} else {
+		err = requireStatus(C.coakka_v2_go_stream_lane_prepare_publish(l.bindings.ptr, (*C.coakka_v2_stream_lane_t)(lane), id, token, C.uint64_t(spec.FormatID), C.uint32_t(spec.MaxFrameBytes), C.uintptr_t(handle)), "stream_lane_prepare_publish")
+	}
 	if err != nil {
 		handle.Delete()
-		return err
+		return StreamPublishGrant{}, err
 	}
 	l.mu.Lock()
 	l.callbacks[streamCallbackKey{spec.SessionID, StreamPublish}] = handle
 	l.mu.Unlock()
-	return nil
+	if !grantRequested {
+		return StreamPublishGrant{}, nil
+	}
+	return StreamPublishGrant{
+		Owner:     LaneOwnerEndpoint{OwnerInstanceID: C.GoString(&nativeGrant.owner.owner_instance_id[0]), AdvertisedHost: C.GoString(&nativeGrant.owner.advertised_host[0]), Port: uint16(nativeGrant.owner.port)},
+		SessionID: C.GoString(&nativeGrant.session_id[0]), AuthorizationToken: C.GoString(&nativeGrant.authorization_token[0]), FormatID: uint64(nativeGrant.format_id), MaxFrameBytes: uint32(nativeGrant.max_frame_bytes),
+	}, nil
 }
 
 // Subscribe queues a subscriber and roots consumer until Forget or Close.
