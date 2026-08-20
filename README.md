@@ -6,9 +6,9 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.7.1-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.7.1)
-[![Release](https://img.shields.io/badge/release-v1.7.1-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.7.1)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![Version](https://img.shields.io/badge/version-v1.8.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.0)
+[![Release](https://img.shields.io/badge/release-v1.8.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.0)
+[![License: file-scoped](https://img.shields.io/badge/license-file--scoped-blue)](PACKAGE-LICENSE.md)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
 **This is the Go connector in the polyglot, multi-language, multi-platform
@@ -18,7 +18,7 @@ request/reply, bounded-admission, and deadletter contract used by the JVM,
 Node.js, Python, C#, Rust, Swift, and other connector lanes.
 
 Kubernetes is supported but not required. Use the public
-[Ecosystem Overview](https://github.com/phuong-tran/coakka-publish/blob/main/docs/ecosystem-overview.md)
+[Ecosystem Overview](https://github.com/phuong-tran/coakka-samples/blob/main/docs/ecosystem-overview.md)
 and [Compatibility Matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md)
 to select an exact module and native OS/CPU payload.
 Start with the [CoAkka Documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md)
@@ -27,11 +27,11 @@ for concepts, integration paths, operations, and runnable samples.
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.7.1
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.0
 ```
 
-Module release `v1.7.1` embeds connector version `2.4.0` and native runtime
-generation `2.4.0+c2f53117`. Every release records its native generation separately so a
+Module release `v1.8.0` embeds connector version `2.5.0` and native runtime
+generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version. The module path
 does not use a `/v2` suffix, so the release remains on semantic major `v1`.
 The module compatibility floor is Go `1.22`; use a currently supported Go
@@ -39,17 +39,18 @@ release for production builds.
 
 Common guidance:
 
-- [Connection strategies](https://github.com/phuong-tran/coakka-publish/blob/main/docs/connection-strategies.md)
-- [TLS and mTLS](https://github.com/phuong-tran/coakka-publish/blob/main/docs/tls-and-mtls.md)
-- [Troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
-- [Contact and support](https://github.com/phuong-tran/coakka-publish/blob/main/docs/contact-and-support.md): `gabrielgun1983@gmail.com`
+- [Connection strategies](https://github.com/phuong-tran/coakka-samples/blob/main/docs/connection-strategies.md)
+- [TLS and mTLS](https://github.com/phuong-tran/coakka-samples/blob/main/docs/tls-and-mtls.md)
+- [Troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
+- [Contact and support](https://github.com/phuong-tran/coakka-samples/blob/main/docs/contact-and-support.md): `gabrielgun1983@gmail.com`
 - [Go transport API](TRANSPORT_CONFIGURATION.md)
 
 ## License
 
-The Go connector source is Apache-2.0 licensed. The bundled native runtime
-libraries under `native/` use the CoAkka Public Artifact terms in
-`NATIVE-LICENSE.md`.
+Connector material is Apache-2.0 under [LICENSE](LICENSE). Bundled native
+material uses the terms in [NATIVE-LICENSE.md](NATIVE-LICENSE.md). See
+[PACKAGE-LICENSE.md](PACKAGE-LICENSE.md) for the file-scope map and
+[NOTICE](NOTICE) for the package notice.
 
 ## New To CoAkka
 
@@ -82,7 +83,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.7.1
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.0
 ```
 
 ## Quick Start
@@ -191,7 +192,7 @@ bash scripts/package-release.sh
 The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-2.4.0.tar.gz
+go/coakka-v2-connector-go-2.5.0.tar.gz
 ```
 
 Public Go module export:
@@ -296,14 +297,14 @@ Native runtime resolution order:
 - local fallback under `lib/`
 
 The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.7.1`
+ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.8.0`
 request/reply passes on macOS ARM64. Linux x86-64 CI verifies the module with
 Go `1.22.12` and current stable Go; unchanged native generation
-`2.4.0+c2f53117` retains its earlier Linux ARM64/x86-64 matching-host runtime
+`2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a` retains its earlier Linux ARM64/x86-64 matching-host runtime
 evidence. All five native digests and binary formats match release metadata.
 Both Windows payloads pass package, export, dependency, and digest gates;
 matching Go-on-Windows execution is not recorded for this release. See
-[Troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
+[Troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
 for OS/CPU selection, dependencies, Gatekeeper, Authenticode, digests, and the
 currently absent publisher signing.
 
@@ -332,7 +333,13 @@ Cross-language demo web lives under `examples/` when that workspace is present.
 
 `OpenFileLane(...)` exposes the independent native bulk-transfer lane with
 concurrent wait/cancel and draining `Close()`. See the shared
-[file-lane contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-file-transfer.md) before packaging it with a native runtime.
+[file-lane contract](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-file-transfer.md) before packaging it with a native runtime.
+
+## Stream Lane
+
+Module `v1.8.0` contains the Stream Lane connector surface over exact native
+generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. Keep that pairing intact and follow the public
+[streaming contract](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-streaming.md).
 
 ## AI-Assisted Integration
 
@@ -341,9 +348,3 @@ with the public [AI-assisted integration guide](https://github.com/phuong-tran/c
 It requires an exact package coordinate, platform evidence, the runnable
 language sample, and the feature-specific lifecycle contract. Do not translate
 API identifiers from another language by analogy.
-
-## Stream Lane
-
-Module `v1.7.1` contains the Stream Lane connector surface over exact native
-generation `2.4.0+c2f53117`. Keep that pairing intact and follow the public
-[streaming contract](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-streaming.md).

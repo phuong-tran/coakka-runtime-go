@@ -65,7 +65,7 @@ host, err := coakka.StartRuntimeHost(coakka.ConnectorStartSpec{
 
 Do not add a listener merely because application code and the runtime are in
 the same process. See the canonical
-[runtime network modes](https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-network-modes.md)
+[runtime network modes](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-network-modes.md)
 guide for embedded, outbound-only, and cross-process deployment shapes.
 
 ## Public Functions
@@ -106,7 +106,7 @@ credential ID. Credential values in plaintext mode are forwarded for stable
 core rejection rather than discarded. Strings containing NUL are rejected at
 the Go/C boundary.
 
-See the canonical [connection strategy guide](https://github.com/phuong-tran/coakka-publish/blob/main/docs/connection-strategies.md)
+See the canonical [connection strategy guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/connection-strategies.md)
 for `PER_EXCHANGE`, `BOUNDED_POOL`, `PERSISTENT_SINGLE_FLIGHT`, and
 `MULTIPLEXING` behavior, defaults, edition matrix, and tuning availability.
 
@@ -138,7 +138,7 @@ validates material during the synchronous apply, then atomically publishes an
 immutable TLS context. It never returns secret paths or bytes through public
 snapshots.
 
-See the canonical [TLS/mTLS guide](https://github.com/phuong-tran/coakka-publish/blob/main/docs/tls-and-mtls.md)
+See the canonical [TLS/mTLS guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/tls-and-mtls.md)
 for direct runtime TLS/mTLS without a service-mesh data plane, Kubernetes,
 controlled networks, LAN/edge, RPi, BeagleBone, bare metal, industrial Android,
 and rotation semantics.
@@ -153,7 +153,7 @@ are not torn down and registered twice across sequential host lifecycles.
 The module keeps and digest-verifies Windows x86-64, macOS ARM64, and Linux
 ARM64 native artifacts. Cross-compilation and payload presence are not execution
 evidence; exact connector and consumer evidence is reported per platform. Use
-[common troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
+[common troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
 for loader, OS/CPU, dependency, certificate, Gatekeeper, Authenticode, digest,
 and signing status. Publisher signing is currently absent.
 Contact `gabrielgun1983@gmail.com` or use the public issue tracker.

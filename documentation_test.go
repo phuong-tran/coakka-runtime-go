@@ -18,7 +18,7 @@ func TestReadmeUsesPublicFileLaneContract(t *testing.T) {
 	}
 
 	text := string(readme)
-	const publicContract = "https://github.com/phuong-tran/coakka-publish/blob/main/docs/runtime-file-transfer.md"
+	const publicContract = "https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-file-transfer.md"
 	if !strings.Contains(text, publicContract) {
 		t.Fatalf("README is missing public file-lane contract: %s", publicContract)
 	}

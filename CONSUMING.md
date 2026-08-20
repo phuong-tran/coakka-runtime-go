@@ -5,7 +5,7 @@ CoAkka Runtime ecosystem. The public Go module includes the matching native
 runtime libraries:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.7.1
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.0
 ```
 
 Every module release records its connector version and bundled native runtime
@@ -18,7 +18,7 @@ module my-runtime-consumer
 
 go 1.22
 
-require github.com/phuong-tran/coakka-runtime-go v1.7.1
+require github.com/phuong-tran/coakka-runtime-go v1.8.0
 ```
 
 Go `1.22` is the module compatibility floor. For production builds, use a
@@ -67,15 +67,15 @@ Package targets:
 - `windows-x86_64`
 
 All five native digests and binary formats are verified during packaging.
-Exact module `v1.7.1` request/reply passes on macOS ARM64. Module source and
+Exact module `v1.8.0` request/reply passes on macOS ARM64. Module source and
 consumer-shaped package tests pass on Linux x86-64 with Go `1.22.12` and the
-current stable toolchain. Exact native generation `2.4.0+c2f53117` retains the
+current stable toolchain. Exact native generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a` retains the
 previous matching-host request/reply evidence on Linux
 ARM64/x86-64. Both Windows payloads pass package, export, dependency, and
 digest gates; matching Go-on-Windows execution is not recorded. Read
 [Transport Configuration](TRANSPORT_CONFIGURATION.md) before selecting a
 non-default connection mode or TLS/mTLS, and use the canonical
-[troubleshooting guide](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md)
+[troubleshooting guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
 for loader, architecture, certificate, and publisher-trust failures.
 
 One Go process may start one active runtime host. `StartConnectorOrchestrator`

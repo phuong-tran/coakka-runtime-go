@@ -1,5 +1,14 @@
 # Go Connector Release Notes
 
+## v1.8.0
+
+Publishes connector version `2.5.0`, adds File Lane and Stream Lane, and embeds
+all five payloads from exact native generation
+`2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. The module keeps semantic major
+`v1` because its public path has no `/v2` suffix. Package licensing is explicit
+by file scope: connector material is Apache-2.0 and bundled CoAkka native
+material remains under the CoAkka Public Artifact License 1.1.
+
 ## v1.7.1
 
 Lowers the module compatibility floor from Go `1.23.0` to Go `1.22`, the
@@ -75,7 +84,7 @@ macOS ARM64, Linux ARM64/x86-64, and Windows ARM64/x86-64, and its macOS
 consumer smoke passes. This does not claim Linux/Windows execution. Publisher
 signing is absent.
 
-Canonical guides: [connection strategies](https://github.com/phuong-tran/coakka-publish/blob/main/docs/connection-strategies.md),
-[TLS/mTLS](https://github.com/phuong-tran/coakka-publish/blob/main/docs/tls-and-mtls.md),
-[troubleshooting](https://github.com/phuong-tran/coakka-publish/blob/main/docs/troubleshooting.md),
-and [contact/support](https://github.com/phuong-tran/coakka-publish/blob/main/docs/contact-and-support.md).
+Canonical guides: [connection strategies](https://github.com/phuong-tran/coakka-samples/blob/main/docs/connection-strategies.md),
+[TLS/mTLS](https://github.com/phuong-tran/coakka-samples/blob/main/docs/tls-and-mtls.md),
+[troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md),
+and [contact/support](https://github.com/phuong-tran/coakka-samples/blob/main/docs/contact-and-support.md).
