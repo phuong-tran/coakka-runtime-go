@@ -10,7 +10,7 @@
 //
 // Install the public module with:
 //
-//	go get github.com/phuong-tran/coakka-runtime-go@v1.8.0
+//	go get github.com/phuong-tran/coakka-runtime-go@v1.8.1
 //
 // CoAkka is a native-backed runtime and logger toolkit for application-owned
 // work. It lets an app route work by target name, handle request/reply,

@@ -1,5 +1,11 @@
 # Go Connector Release Notes
 
+## v1.8.1
+
+Publishes connector version `2.5.1`, corrects public documentation, and adopts
+the file-scoped Apache-2.0 and CoAkka Native Artifact License 1.2 package map.
+Native code, Go API, ABI, and the exact native generation are unchanged.
+
 ## v1.8.0
 
 Publishes connector version `2.5.0`, adds File Lane and Stream Lane, and embeds

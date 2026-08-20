@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.8.0-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.0)
-[![Release](https://img.shields.io/badge/release-v1.8.0-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.0)
+[![Version](https://img.shields.io/badge/version-v1.8.1-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.1)
+[![Release](https://img.shields.io/badge/release-v1.8.1-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.1)
 [![License: file-scoped](https://img.shields.io/badge/license-file--scoped-blue)](PACKAGE-LICENSE.md)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
@@ -27,10 +27,10 @@ for concepts, integration paths, operations, and runnable samples.
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.1
 ```
 
-Module release `v1.8.0` embeds connector version `2.5.0` and native runtime
+Module release `v1.8.1` embeds connector version `2.5.1` and native runtime
 generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version. The module path
 does not use a `/v2` suffix, so the release remains on semantic major `v1`.
@@ -44,13 +44,6 @@ Common guidance:
 - [Troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
 - [Contact and support](https://github.com/phuong-tran/coakka-samples/blob/main/docs/contact-and-support.md): `gabrielgun1983@gmail.com`
 - [Go transport API](TRANSPORT_CONFIGURATION.md)
-
-## License
-
-Connector material is Apache-2.0 under [LICENSE](LICENSE). Bundled native
-material uses the terms in [NATIVE-LICENSE.md](NATIVE-LICENSE.md). See
-[PACKAGE-LICENSE.md](PACKAGE-LICENSE.md) for the file-scope map and
-[NOTICE](NOTICE) for the package notice.
 
 ## New To CoAkka
 
@@ -83,7 +76,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.0
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.1
 ```
 
 ## Quick Start
@@ -192,7 +185,7 @@ bash scripts/package-release.sh
 The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-2.5.0.tar.gz
+go/coakka-v2-connector-go-2.5.1.tar.gz
 ```
 
 Public Go module export:
@@ -297,7 +290,7 @@ Native runtime resolution order:
 - local fallback under `lib/`
 
 The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.8.0`
+ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.8.1`
 request/reply passes on macOS ARM64. Linux x86-64 CI verifies the module with
 Go `1.22.12` and current stable Go; unchanged native generation
 `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a` retains its earlier Linux ARM64/x86-64 matching-host runtime
@@ -337,7 +330,7 @@ concurrent wait/cancel and draining `Close()`. See the shared
 
 ## Stream Lane
 
-Module `v1.8.0` contains the Stream Lane connector surface over exact native
+Module `v1.8.1` contains the Stream Lane connector surface over exact native
 generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. Keep that pairing intact and follow the public
 [streaming contract](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-streaming.md).
 
@@ -348,3 +341,18 @@ with the public [AI-assisted integration guide](https://github.com/phuong-tran/c
 It requires an exact package coordinate, platform evidence, the runnable
 language sample, and the feature-specific lifecycle contract. Do not translate
 API identifiers from another language by analogy.
+
+## License
+
+**Free for application use, including commercial and production use.**
+
+Connector source, generated bindings, type declarations, examples, and package
+documentation use the [Apache License, Version 2.0](https://github.com/phuong-tran/coakka-samples/blob/main/LICENSE).
+Bundled Native Core files use the [CoAkka Native Artifact License 1.2](https://github.com/phuong-tran/coakka-samples/blob/main/NATIVE-LICENSE.md).
+Those native terms permit ordinary application and SaaS use but require a
+separate agreement to sell or offer CoAkka itself as managed runtime or
+infrastructure.
+
+See [CoAkka Package Licensing](https://github.com/phuong-tran/coakka-samples/blob/main/docs/package-licensing.md)
+for the file-scope map. The package also carries offline `LICENSE`,
+`NATIVE-LICENSE.md`, `PACKAGE-LICENSE.md`, and `NOTICE` copies.
