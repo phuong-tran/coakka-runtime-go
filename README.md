@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.8.2-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.2)
-[![Release](https://img.shields.io/badge/release-v1.8.2-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.2)
+[![Version](https://img.shields.io/badge/version-v1.8.3-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.3)
+[![Release](https://img.shields.io/badge/release-v1.8.3-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.3)
 [![License: file-scoped](https://img.shields.io/badge/license-file--scoped-blue)](PACKAGE-LICENSE.md)
 [![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
 
@@ -27,11 +27,11 @@ for concepts, integration paths, operations, and runnable samples.
 Go module:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.2
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.3
 ```
 
-Module release `v1.8.2` embeds connector version `2.5.2` and native runtime
-generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. Every release records its native generation separately so a
+Module release `v1.8.3` embeds connector version `2.5.3` and native runtime
+generation `2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`. Every release records its native generation separately so a
 Go module version is never mistaken for the runtime version. The module path
 does not use a `/v2` suffix, so the release remains on semantic major `v1`.
 The module compatibility floor is Go `1.22`; use a currently supported Go
@@ -76,7 +76,7 @@ customer command that often becomes fake backend HTTP in a growing app:
 mkdir coakka-runtime-go-first-run
 cd coakka-runtime-go-first-run
 go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.2
+go get github.com/phuong-tran/coakka-runtime-go@v1.8.3
 ```
 
 ## Quick Start
@@ -185,7 +185,7 @@ bash scripts/package-release.sh
 The archive is written to:
 
 ```text
-go/coakka-v2-connector-go-2.5.2.tar.gz
+go/coakka-v2-connector-go-2.5.3.tar.gz
 ```
 
 Public Go module export:
@@ -290,11 +290,12 @@ Native runtime resolution order:
 - local fallback under `lib/`
 
 The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.8.2`
+ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.8.3`
 request/reply passes on macOS ARM64. Linux x86-64 CI verifies the module with
-Go `1.22.12` and current stable Go; unchanged native generation
-`2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a` retains its earlier Linux ARM64/x86-64 matching-host runtime
-evidence. All five native digests and binary formats match release metadata.
+Go `1.22.12` and current stable Go. The exact C1 generation is
+`2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`; all five native digests and
+binary formats match release metadata. Matching-host Linux execution remains
+a release gate for this Go package.
 Both Windows payloads pass package, export, dependency, and digest gates;
 matching Go-on-Windows execution is not recorded for this release. See
 [Troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
@@ -330,8 +331,8 @@ concurrent wait/cancel and draining `Close()`. See the shared
 
 ## Stream Lane
 
-Module `v1.8.2` contains the Stream Lane connector surface over exact native
-generation `2.5.0+4b65d0b2256037bf7fc180bfa6df8c41efc1dd6a`. Keep that pairing intact and follow the public
+Module `v1.8.3` contains the Stream Lane connector surface over exact native
+generation `2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`. Keep that pairing intact and follow the public
 [streaming contract](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-streaming.md).
 Replica owners use `OpenOwnedFileLane`/`OpenOwnedStreamLane`, then
 `PrepareReceiveGrant`/`PreparePublishGrant`. Reconstruct the returned Go struct

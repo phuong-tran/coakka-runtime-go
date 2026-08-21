@@ -1,5 +1,12 @@
 # Go Connector Release Notes
 
+## v1.8.3
+
+Publishes connector version `2.5.3` over exact Core generation
+`2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`. The Go API and public C ABI
+remain unchanged; the native patch fixes Stream Lane cancellation and
+control-window liveness.
+
 ## v1.8.2
 
 Publishes connector version `2.5.2` with typed File and Stream Lane owner
