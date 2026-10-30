@@ -96,5 +96,5 @@ Managed connector source uses Apache2.0. Native images use the file-scoped
 CoAkka Native Artifact License1.2. Retain the supplied LICENSE, NOTICE,
 NATIVE-LICENSE.md and PACKAGE-LICENSE.md. Publisher signing is currently absent.
 
-[File transfer](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md) ·
+[File transfer](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md) and
 [Monitoring and defaults](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/operations/runtime-monitoring.md).
