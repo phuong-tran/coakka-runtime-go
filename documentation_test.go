@@ -4,8 +4,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,13 +20,19 @@ func TestReadmeUsesPublicFileLaneContract(t *testing.T) {
 	}
 
 	text := string(readme)
-	const publicContract = "https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-file-transfer.md"
+	const publicContract = "https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md"
 	if !strings.Contains(text, publicContract) {
 		t.Fatalf("README is missing public file-lane contract: %s", publicContract)
 	}
-	for _, privateRepository := range []string{"coakkaJVMConnector", "coakkaCoreNativeDev"} {
-		if strings.Contains(text, privateRepository) {
-			t.Fatalf("README contains private repository reference: %s", privateRepository)
+	allowed := map[string]bool{"coakka-samples": true, "coakka-publish": true, "coakka-runtime-go": true}
+	for _, link := range regexp.MustCompile("https://github.com/phuong-tran/[^\\s)\x60]+").FindAllString(text, -1) {
+		parsed, err := url.Parse(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts := strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")
+		if len(parts) < 2 || !allowed[parts[1]] {
+			t.Fatalf("README links outside public product repositories: %s", link)
 		}
 	}
 }
@@ -62,11 +70,7 @@ func TestRootAPIDoesNotExposeWireCodecTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list root Go files: %v", err)
 	}
-	forbiddenImports := map[string]bool{
-		"github.com/phuong-tran/coakka-runtime-go/coakka/v2":       true,
-		"github.com/phuong-tran/coakka-runtime-go/internal/wirepb": true,
-		"google.golang.org/protobuf/proto":                         true,
-	}
+
 	for _, path := range files {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -80,7 +84,7 @@ func TestRootAPIDoesNotExposeWireCodecTypes(t *testing.T) {
 			if unquoteErr != nil {
 				t.Fatalf("parse import in %s: %v", path, unquoteErr)
 			}
-			if forbiddenImports[importPath] {
+			if strings.Contains(strings.Split(importPath, "/")[0], ".") && !strings.HasPrefix(importPath, "github.com/phuong-tran/coakka-runtime-go/v3/") {
 				t.Fatalf("root package imports private wire implementation %q in %s", importPath, path)
 			}
 		}

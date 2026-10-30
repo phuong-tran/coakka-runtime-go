@@ -6,6 +6,20 @@ capability, validation, or edition behavior.
 
 ## Startup Contract
 
+The unpublished ca7 native-client source uses Core's constructor-owned
+connection intent. Omission means AUTO and Core-reported multiplexing; it does
+not mean PerExchange. `Monitor:nil` preserves omission/OFF, while a non-nil
+`RuntimeMonitorOptions` preserves explicit false/true. Inspect the accepted
+startup snapshot; do not reconstruct it from builder inputs. This source train
+is not promoted by the historical module/package instructions below.
+
+In this source API, `StartupConfig()` returns accepted Core state plus error;
+there is no synthetic `StartupTCPConnectionResult()`. Inspection APIs expose
+errors, and independent hosts are permitted by Core. The API/default tables
+below describe the released historical module, not an extra compatibility
+branch in the new source. Managed API migration and private package verification
+must finish before selecting a new module coordinate.
+
 Set `Network`, `ConnectionStrategy`, and `Security` on `ConnectorStartSpec` or
 `ConnectorConfig`. The connector creates the native runtime, applies the
 network options and selected transport policy in `CREATED`, exports host
@@ -65,7 +79,7 @@ host, err := coakka.StartRuntimeHost(coakka.ConnectorStartSpec{
 
 Do not add a listener merely because application code and the runtime are in
 the same process. See the canonical
-[runtime network modes](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-network-modes.md)
+[runtime network modes](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/reference/runtime-network-modes.md)
 guide for embedded, outbound-only, and cross-process deployment shapes.
 
 ## Public Functions
@@ -94,8 +108,11 @@ bind endpoint and a non-wildcard advertise endpoint. `LocalRouteDefault(...)`
 uses port `0` because a local route is process-owned rather than a loopback TCP
 endpoint.
 
-`RuntimeTCPConnectionStrategySpec.Mode` defaults to `PER_EXCHANGE` because the
-Go zero value maps to the core zero value. `MaxConnections`,
+When the optional connection group is supplied, its
+`RuntimeTCPConnectionStrategySpec.Mode` zero value explicitly selects
+`PER_EXCHANGE`. Omitting the whole group instead asks Core for its current
+`MULTIPLEXING` default; the connector does not turn omission into a zero-value
+spec. `MaxConnections`,
 `MaxRequestsPerConnection`, and `IdleTimeoutMillis` are pointers: nil omits the
 field; a non-nil zero is an explicit value that core validation may reject.
 
@@ -106,7 +123,7 @@ credential ID. Credential values in plaintext mode are forwarded for stable
 core rejection rather than discarded. Strings containing NUL are rejected at
 the Go/C boundary.
 
-See the canonical [connection strategy guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/connection-strategies.md)
+See the canonical [connection strategy guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/reference/connection-strategies.md)
 for `PER_EXCHANGE`, `BOUNDED_POOL`, `PERSISTENT_SINGLE_FLIGHT`, and
 `MULTIPLEXING` behavior, defaults, edition matrix, and tuning availability.
 
@@ -138,7 +155,7 @@ validates material during the synchronous apply, then atomically publishes an
 immutable TLS context. It never returns secret paths or bytes through public
 snapshots.
 
-See the canonical [TLS/mTLS guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/tls-and-mtls.md)
+See the canonical [TLS/mTLS guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/reference/tls-and-mtls.md)
 for direct runtime TLS/mTLS without a service-mesh data plane, Kubernetes,
 controlled networks, LAN/edge, RPi, BeagleBone, bare metal, industrial Android,
 and rotation semantics.
@@ -153,7 +170,7 @@ are not torn down and registered twice across sequential host lifecycles.
 The module keeps and digest-verifies Windows x86-64, macOS ARM64, and Linux
 ARM64 native artifacts. Cross-compilation and payload presence are not execution
 evidence; exact connector and consumer evidence is reported per platform. Use
-[common troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
+[common troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/operations/troubleshooting.md)
 for loader, OS/CPU, dependency, certificate, Gatekeeper, Authenticode, digest,
 and signing status. Publisher signing is currently absent.
 Contact `gabrielgun1983@gmail.com` or use the public issue tracker.

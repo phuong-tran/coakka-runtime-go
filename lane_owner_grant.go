@@ -6,8 +6,6 @@ import (
 	"fmt"
 )
 
-const runtimeFeatureLaneOwnerGrants uint32 = 1 << 25
-
 // LaneOwnerConfig identifies and advertises one exact receiver or publisher replica.
 // AdvertisedHost must route directly to that owner, never through a load-balancing service.
 type LaneOwnerConfig struct {
@@ -98,12 +96,5 @@ func (g *StreamPublishGrant) UnmarshalJSON(data []byte) error {
 }
 
 func requireLaneOwnerGrants(bindings *nativeBindings) error {
-	info, err := bindings.readRuntimeInfo()
-	if err != nil {
-		return err
-	}
-	if info.FeatureFlags&runtimeFeatureLaneOwnerGrants == 0 {
-		return errors.New("native runtime does not advertise lane-owner grants")
-	}
-	return nil
+	return bindings.requireCoreFeature(runtimeFeatureLaneOwnerGrants, "lane-owner grants")
 }

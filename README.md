@@ -1,363 +1,100 @@
-# CoAkka Runtime Go Connector
+# CoAkka Runtime Go 3.0.0
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/phuong-tran/coakka-samples/main/docs/assets/brand/coakka-logo.png" alt="CoAkka" width="480">
-</p>
+CoAkka Runtime is a polyglot, cross-platform distributed runtime for
+application-owned work, backed by a shared native core. This Go connector
+brings the same request/reply, deadletter, File and Stream contract to Go
+applications while business handlers remain application-owned.
 
-[![CI](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml/badge.svg)](https://github.com/phuong-tran/coakka-runtime-go/actions/workflows/go-ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/phuong-tran/coakka-runtime-go.svg)](https://pkg.go.dev/github.com/phuong-tran/coakka-runtime-go)
-[![Version](https://img.shields.io/badge/version-v1.8.3-blue)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.3)
-[![Release](https://img.shields.io/badge/release-v1.8.3-informational)](https://github.com/phuong-tran/coakka-runtime-go/releases/tag/v1.8.3)
-[![License: file-scoped](https://img.shields.io/badge/license-file--scoped-blue)](PACKAGE-LICENSE.md)
-[![Funding](https://img.shields.io/badge/funding-Ko--fi-ff5f5f)](https://ko-fi.com/phuongnamtran)
+This package uses module `github.com/phuong-tran/coakka-runtime-go/v3`,
+version `v3.0.0`, over native Core3.0.0/1522b4a9/ABI1. It is a new API baseline
+after public v1.8.3. See the [current package ledger](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/current-packages.md) for registry/tag availability.
 
-**This is the Go connector in the polyglot, multi-language, multi-platform
-CoAkka Runtime ecosystem.** CoAkka is not a Go-only runtime: this module
-adapts Go applications to the same native core, public C ABI, target,
-request/reply, bounded-admission, and deadletter contract used by the JVM,
-Node.js, Python, C#, Rust, Swift, and other connector lanes.
+## Module and build requirements
 
-Kubernetes is supported but not required. Use the public
-[Ecosystem Overview](https://github.com/phuong-tran/coakka-samples/blob/main/docs/ecosystem-overview.md)
-and [Compatibility Matrix](https://github.com/phuong-tran/coakka-publish/blob/main/docs/compatibility-matrix.md)
-to select an exact module and native OS/CPU payload.
-Start with the [CoAkka Documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md)
-for concepts, integration paths, operations, and runnable samples.
+Use the /v3 import path. The v3.0.0 tag must belong to this module path.
+There are no external Go module dependencies. A working C11 cgo compiler is
+required at build time; the resulting app contains the selected native image.
 
-Go module:
+Install the matching module version:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.3
+go get github.com/phuong-tran/coakka-runtime-go/v3@v3.0.0
 ```
 
-Module release `v1.8.3` embeds connector version `2.5.3` and native runtime
-generation `2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`. Every release records its native generation separately so a
-Go module version is never mistaken for the runtime version. The module path
-does not use a `/v2` suffix, so the release remains on semantic major `v1`.
-The module compatibility floor is Go `1.22`; use a currently supported Go
-release for production builds.
+For controlled pre-release qualification only, use an admitted local module
+with a standard `replace` directive. Normal installed applications use the
+public version above without replacements or native-path overrides.
 
-Common guidance:
+The compatibility floor is Go1.22.12 for macOS ARM64, Linux ARM64/x64 and
+Windows x64. Native Windows ARM64 uses its separately qualified Go1.25.5/cgo
+profile. A build on another architecture does not prove execution there.
+The selected native images target macOS13 ARM64, Linux ARM64 glibc2.35,
+Linux x64 glibc2.36, Windows x64 and Windows11 ARM64; exact matching execution
+and minimum-OS results belong to the candidate's qualification record.
 
-- [Connection strategies](https://github.com/phuong-tran/coakka-samples/blob/main/docs/connection-strategies.md)
-- [TLS and mTLS](https://github.com/phuong-tran/coakka-samples/blob/main/docs/tls-and-mtls.md)
-- [Troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
-- [Contact and support](https://github.com/phuong-tran/coakka-samples/blob/main/docs/contact-and-support.md): `gabrielgun1983@gmail.com`
-- [Go transport API](TRANSPORT_CONFIGURATION.md)
+## First run
 
-## New To CoAkka
-
-CoAkka is a native-backed runtime and logger toolkit for application-owned
-work. It helps an app route work by target name, handle request/reply,
-deadletters, bounded queues, diagnostics, and native-backed logging without
-turning every internal boundary into another hand-written HTTP endpoint.
-
-Use these public repositories to orient first:
-
-| Repository | Use it for | Link |
-| --- | --- | --- |
-| `coakka-samples` | Runnable examples and code you can inspect first. | https://github.com/phuong-tran/coakka-samples |
-| `coakka-publish` | Released packages, native archives, manifests, checksums, compatibility matrix, and release notes. | https://github.com/phuong-tran/coakka-publish |
-| `coakka-runtime-go` | Public Go module source for this package. | https://github.com/phuong-tran/coakka-runtime-go |
-| `coakka-logger-go` | Public Go logger module source. | https://github.com/phuong-tran/coakka-logger-go |
-
-Run the matching sample:
+From this repository checkout, run the ordinary app:
 
 ```sh
-git clone https://github.com/phuong-tran/coakka-samples.git
-cd coakka-samples
-bash run.sh runtime go basic
+go run ./examples/first-run
 ```
 
-Try the module without cloning any CoAkka repo. The example uses the same
-customer command that often becomes fake backend HTTP in a growing app:
+Expected output: `accepted-hello`. The example starts one host, handles one
+request and preserves both operation and close failures.
 
-```sh
-mkdir coakka-runtime-go-first-run
-cd coakka-runtime-go-first-run
-go mod init coakka-runtime-go-first-run
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.3
-```
+## Application shape
 
-## Quick Start
+Import the connector with a local application alias:
 
 ```go
-package main
-
-import (
-	"encoding/json"
-	"fmt"
-	"time"
-
-	coakka "github.com/phuong-tran/coakka-runtime-go"
-)
-
-func main() {
-	const target = "samples.customer.store.create"
-	store := map[string]map[string]any{}
-
-	runtimeHost, err := coakka.StartRuntimeHost(coakka.ConnectorStartSpec{
-		SystemName: "customer-app",
-		NodeID:     "customer-app-node-1",
-		Routes:     []coakka.RouteSpec{coakka.LocalRouteDefault(target)},
-	}, "")
-	if err != nil {
-		panic(err)
-	}
-	defer runtimeHost.Close()
-
-	err = runtimeHost.RegisterHandler(target, func(request *coakka.Envelope) *coakka.Envelope {
-		var draft map[string]any
-		_ = json.Unmarshal(request.GetPayload(), &draft)
-		customer := map[string]any{
-			"id":        draft["id"],
-			"name":      draft["name"],
-			"createdBy": request.GetSource(),
-		}
-		store[customer["id"].(string)] = customer
-
-		reply, _ := coakka.MakeJSONReplyFromRequestIdentity(request, target, map[string]any{
-			"status":      "created",
-			"customer":    customer,
-			"storedCount": len(store),
-		})
-		return reply
-	}, true)
-	if err != nil {
-		panic(err)
-	}
-
-	response, err := runtimeHost.AskJSON(
-		"customer-api",
-		target,
-		map[string]any{"id": "cust-001", "name": "Ada Lovelace"},
-		coakka.NewPayloadIdentity("samples.customer.create.request.v1", 1, coakka.PayloadFormatJSON),
-		2*time.Second,
-		"create_customer",
-		coakka.DeliveryHintRouterDefault,
-		nil,
-	)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(response)
-}
+import coakka "github.com/phuong-tran/coakka-runtime-go/v3"
 ```
 
-One process owns one active runtime host. Start the host, register handlers for
-targets this process owns, send typed requests to target names, then close the
-host during application shutdown.
+Start a runtime host with the application's identity and routes, register
+handlers, make typed requests and propagate both operation and close failures.
+The runnable [basic, deadletter and File fan-out samples](https://github.com/phuong-tran/coakka-samples/tree/main/coakka-runtime/go)
+show complete ownership and cleanup through the selected package.
 
-## Development
+Core resolves omitted configuration to AUTO execution and MULTIPLEXED
+connections. Core owns effective configuration, capability probes, admission,
+deadlines, terminal causes and native shutdown. Inspect its accepted snapshots;
+do not reconstruct native state from submitted preferences.
 
-Quick verification:
+Go owns Go values, callback/goroutine scheduling and FFI memory safety.
+Handler payloads and returned snapshots are copied before native leases retire.
+Handlers must return promptly; cancellation and close are explicit lifecycle
+operations. A failed close retains owners for the documented retry law.
 
-```bash
-cd go
-go test ./...
-```
+The package's selected image is embedded at build time. Its digest-addressed
+cache publishes atomically. Cold load, reuse and concurrent publishers must
+converge on the same image; a corrupt existing entry refuses and remains
+unchanged. No ambient library search or older runtime fallback is supplied.
 
-Optional live runtime integration smoke:
+## Migration from v1
 
-```bash
-export COAKKA_GO_INTEGRATION=1
-cd go
-go test ./...
-```
+Change imports and requirements to /v3 and recompile. Runtime metadata uses
+TransportProvider/AllocatorProvider and TransportBindHost/TransportBindPort
+rather than the old SouthboundBackend/AllocatorBackend and SouthboundBind*
+fields. The module no longer depends on generated message bindings.
+Review current constructors, typed values and error handling instead of
+retaining accidental source or binary compatibility aliases.
 
-This integration lane runs a helper subprocess to avoid `dlopen` collisions in
-the `go test` binary on macOS.
+Core-issued unknown numeric statuses and labels remain unknown values.
+Feature-unavailable errors follow a successful capability inspection;
+inspection failures retain their actual cause. Queue, frame and transport
+defaults are resolved by Core outside request hot paths.
 
-Package smoke with the embedded native runtime:
-
-```bash
-cd go
-bash scripts/smoke-packaged-package.sh
-```
-
-Package release tarball:
-
-```bash
-cd go
-bash scripts/package-release.sh
-```
-
-The archive is written to:
-
-```text
-go/coakka-v2-connector-go-2.5.3.tar.gz
-```
-
-Public Go module export:
-
-```bash
-cd go
-bash scripts/export-module-repo.sh /tmp/coakka-runtime-go-module
-```
-
-The exported directory is the root of public module
-`github.com/phuong-tran/coakka-runtime-go`.
-
-Main public surface:
-
-- `StartRuntimeHost(startSpec, runtimeLibPath)` as the preferred single-process
-  lifecycle entrypoint
-- `StartConnectorOrchestrator(startSpec, runtimeLibPath)`
-- `GoRuntimeClient`
-- `PayloadIdentity`
-- `NewTextPayloadIdentity(...)` and `PayloadFormatText` for text-first samples
-- `LocalRouteDefault(...)` / `LocalRoute(...)` for same-process targets
-- `SubmitRequestTyped(...)`, `SubmitRequestJSON(...)`, `SubmitRequestRaw(...)`
-- `TerminalEvents(ctx, buffer)`
-- `MakeJSONReplyFromRequestIdentity(...)`
-- `RuntimeControlClient`
-- `RuntimeMonitor`
-- capability discovery, startup-configured connection/security policy, and
-  structured atomic apply results
-- same-mode TLS/mTLS credential generation reload with failed-reload state
-  preservation
-- delivered-request lane enabled by default for request/reply hosts; set
-  `DisableSeparateDeliveredRequestLane: true` only for advanced, measured,
-  mostly one-way hosts
-
-## Before / After
-
-Before, the browser/API edge can be real HTTP, but teams often add a second
-private backend HTTP endpoint only so work owned by the same app or team has
-an address:
-
-```go
-func createCustomerBackendHTTP(w http.ResponseWriter, r *http.Request) {
-	var draft map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&draft)
-	customer := storeCreate(draft)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"status":   "created",
-		"customer": customer,
-	})
-}
-
-func createCustomerPublicAPI(w http.ResponseWriter, r *http.Request) {
-	reply, _ := http.Post(
-		"http://customer-store/backend/customers",
-		"application/json",
-		r.Body,
-	)
-	defer reply.Body.Close()
-	_, _ = io.Copy(w, reply.Body)
-}
-```
-
-After, the public API can stay HTTP, but the fake backend URL becomes a CoAkka
-target:
-
-```go
-func createCustomerPublicAPI(w http.ResponseWriter, r *http.Request) {
-	var draft map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&draft)
-
-	response, err := runtimeHost.AskJSON(
-	"customer-api",
-	"samples.customer.store.create",
-	draft,
-	coakka.NewPayloadIdentity("samples.customer.create.request.v1", 1, coakka.PayloadFormatJSON),
-	5*time.Second,
-	"create_customer",
-	coakka.DeliveryHintRouterDefault,
-	nil,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusGatewayTimeout)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(response)
-}
-```
-
-The change is not "replace HTTP." HTTP still belongs at real browser/API or
-legacy edges. CoAkka removes backend HTTP that exists only to call capabilities
-owned by the same app or team by URL.
-
-`StartConnectorOrchestrator` remains available for existing code. New examples
-prefer `StartRuntimeHost` so the first screen reads as one embedded runtime
-owner, not a remote connector setup.
-
-Native runtime resolution order:
-
-- explicit `runtimeLibPath`
-- `$COAKKA_RUNTIME_LIB`
-- packaged native under `native/<platform>/`
-- local fallback under `lib/`
-
-The package includes target-specific native libraries for macOS ARM64, Linux
-ARM64/x86-64, and Windows ARM64/x86-64. Exact public module `v1.8.3`
-request/reply passes on macOS ARM64. Linux x86-64 CI verifies the module with
-Go `1.22.12` and current stable Go. The exact C1 generation is
-`2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`; all five native digests and
-binary formats match release metadata. Matching-host Linux execution remains
-a release gate for this Go package.
-Both Windows payloads pass package, export, dependency, and digest gates;
-matching Go-on-Windows execution is not recorded for this release. See
-[Troubleshooting](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
-for OS/CPU selection, dependencies, Gatekeeper, Authenticode, digests, and the
-currently absent publisher signing.
-
-Request/reply lane in Go has two host API shapes over the same runtime contract:
-
-- `Ask...`: submit and wait inline
-- `SubmitRequest...` + `TerminalEvents(...)`: submit now, consume terminal
-  outcome (`response` or `deadletter`) later through a channel
-
-`TerminalEvents(...)` is a connector-owned API shape, not a separate transport
-mode.
-
-Hot-path reading note:
-
-- False sharing is not the first-order hot-path concern in this Go layer in the
-  same way it can be for native runtime internals.
-- The more likely cost centers are core-runtime calls, message encoding and
-  decoding, `TerminalEvents(...)` subscriber churn, and
-  goroutine handoff topology.
-- Cacheline or padding hardening should be revisited only if this layer later
-  owns packed shared state, off-heap rings, or other cacheline-sensitive layout.
-
-Cross-language demo web lives under `examples/` when that workspace is present.
-
-## File Lane
-
-`OpenFileLane(...)` exposes the independent native bulk-transfer lane with
-concurrent wait/cancel and draining `Close()`. See the shared
-[file-lane contract](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-file-transfer.md) before packaging it with a native runtime.
-
-## Stream Lane
-
-Module `v1.8.3` contains the Stream Lane connector surface over exact native
-generation `2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be`. Keep that pairing intact and follow the public
-[streaming contract](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-streaming.md).
-Replica owners use `OpenOwnedFileLane`/`OpenOwnedStreamLane`, then
-`PrepareReceiveGrant`/`PreparePublishGrant`. Reconstruct the returned Go struct
-after authenticated control transport and call `ToSendSpec`/`ToSubscribeSpec`.
-See the [owner-grant ONE/ALL sample](https://github.com/phuong-tran/coakka-samples/blob/main/docs/runtime-lane-owner-grants.md).
-
-## AI-Assisted Integration
-
-Before generating application code, use the selected connector README together
-with the public [AI-assisted integration guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/ai-assisted-integration.md).
-It requires an exact package coordinate, platform evidence, the runnable
-language sample, and the feature-specific lifecycle contract. Do not translate
-API identifiers from another language by analogy.
+See [consumer deployment](CONSUMING.md), [transport configuration](TRANSPORT_CONFIGURATION.md),
+[release controls](RELEASE.md) and [migration notes](RELEASE_NOTES.md).
+The shared [documentation](https://github.com/phuong-tran/coakka-samples/blob/main/docs/README.md)
+owns cross-language concepts and lifecycle guidance.
 
 ## License
 
-**Free for application use, including commercial and production use.**
+Managed connector source uses Apache2.0. Native images use the file-scoped
+CoAkka Native Artifact License1.2. Retain the supplied LICENSE, NOTICE,
+NATIVE-LICENSE.md and PACKAGE-LICENSE.md. Publisher signing is currently absent.
 
-Connector source, generated bindings, type declarations, examples, and package
-documentation use the [Apache License, Version 2.0](https://github.com/phuong-tran/coakka-samples/blob/main/LICENSE).
-Bundled Native Core files use the [CoAkka Native Artifact License 1.2](https://github.com/phuong-tran/coakka-samples/blob/main/NATIVE-LICENSE.md).
-Those native terms permit ordinary application and SaaS use but require a
-separate agreement to sell or offer CoAkka itself as managed runtime or
-infrastructure.
-
-See [CoAkka Package Licensing](https://github.com/phuong-tran/coakka-samples/blob/main/docs/package-licensing.md)
-for the file-scope map. The package also carries offline `LICENSE`,
-`NATIVE-LICENSE.md`, `PACKAGE-LICENSE.md`, and `NOTICE` copies.
+[File transfer](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md) ·
+[Monitoring and defaults](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/operations/runtime-monitoring.md).

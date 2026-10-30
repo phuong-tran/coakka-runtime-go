@@ -1,1115 +1,37 @@
 package coakka_v2_connector
 
 /*
+#cgo CFLAGS: -std=c11 -Wall -Werror -I${SRCDIR}/internal/coreabi/include
 #cgo linux LDFLAGS: -ldl
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <io.h>
-#else
-#include <dlfcn.h>
-#include <poll.h>
-#include <unistd.h>
-#endif
-#include <errno.h>
-#include <limits.h>
-#include <stdint.h>
-#include <stddef.h>
-#include <stdio.h>
+#include "runtime_bridge.h"
 #include <stdlib.h>
 #include <string.h>
-
-typedef struct coakka_v2_runtime_t coakka_v2_runtime_t;
-typedef struct coakka_v2_file_lane_t coakka_v2_file_lane_t;
-typedef struct coakka_v2_stream_lane_t coakka_v2_stream_lane_t;
-
-typedef struct {
-  const char *system_name;
-  const char *node_id;
-  int strict_no_drop;
-  int queue_capacity;
-} coakka_v2_runtime_config_t;
-
-typedef struct {
-  size_t struct_size;
-  uint64_t fields;
-  uint32_t mode;
-  uint32_t reserved;
-  const char *bind_host;
-  const char *advertise_host;
-  uint16_t bind_port;
-  uint16_t advertise_port;
-  uint32_t reserved2;
-} coakka_v2_network_options_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t abi_version;
-  uint32_t feature_flags;
-  const char *runtime_version;
-  const char *git_commit;
-  const char *southbound_backend;
-  const char *allocator_backend;
-  const char *docs_hint;
-} coakka_v2_runtime_info_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *system_name;
-  const char *node_id;
-  int strict_no_drop;
-  int queue_capacity;
-  size_t request_max_frame_size;
-  size_t local_dispatch_batch_limit;
-  int runtime_state;
-  uint32_t snapshot_present;
-  uint64_t applied_generation;
-  size_t route_count;
-  const char *southbound_bind_host;
-  uint16_t southbound_bind_port;
-  uint32_t configured_ingress_overload_mode;
-  uint32_t configured_local_delivery_overload_mode;
-  uint32_t configured_remote_outbound_overload_mode;
-  size_t configured_remote_outbound_reply_reserve_slots;
-  uint32_t effective_ingress_overload_mode;
-  uint32_t effective_local_delivery_overload_mode;
-  uint32_t effective_remote_outbound_overload_mode;
-  size_t effective_remote_outbound_reply_reserve_slots;
-} coakka_v2_runtime_config_view_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t flags;
-  int request_write_fd;
-  int response_read_fd;
-  int deadletter_read_fd;
-  int control_write_fd;
-  int monitor_read_fd;
-  int delivered_request_read_fd;
-} coakka_v2_host_handles_t;
-
-typedef struct {
-  size_t struct_size;
-  int runtime_state;
-  uint32_t flags;
-  uint64_t applied_generation;
-} coakka_v2_runtime_health_t;
-
-typedef struct {
-  size_t struct_size;
-  uint64_t applied_generation;
-  size_t route_count;
-  int runtime_state;
-  size_t ingress_queue_capacity;
-  size_t ingress_queue_depth;
-  size_t ingress_queue_high_watermark;
-  uint64_t queue_rejected_count;
-  uint64_t route_miss_count;
-  uint64_t deadletter_count;
-  uint64_t delivery_failed_count;
-  uint64_t caf_send_failed_count;
-  uint64_t southbound_submit_attempt_count;
-  uint64_t southbound_probe_connect_success_count;
-  uint64_t southbound_probe_connect_failure_count;
-  size_t request_max_frame_size;
-  size_t local_dispatch_batch_limit;
-  size_t delivered_request_outbound_queue_capacity;
-  size_t delivered_request_outbound_queue_depth;
-  size_t delivered_request_outbound_queue_high_watermark;
-  uint64_t delivered_request_outbound_enqueue_block_count;
-  size_t response_outbound_queue_capacity;
-  size_t response_outbound_queue_depth;
-  size_t response_outbound_queue_high_watermark;
-  uint64_t response_outbound_enqueue_block_count;
-  size_t deadletter_outbound_queue_capacity;
-  size_t deadletter_outbound_queue_depth;
-  size_t deadletter_outbound_queue_high_watermark;
-  uint64_t deadletter_outbound_enqueue_block_count;
-  uint64_t remote_reply_timeout_count;
-  uint64_t late_remote_reply_drop_count;
-  size_t remote_outbound_queue_capacity;
-  size_t remote_outbound_queue_depth;
-  size_t remote_outbound_queue_high_watermark;
-  uint64_t remote_outbound_queue_rejected_count;
-  uint64_t remote_outbound_expired_drop_count;
-  uint64_t endpoint_unavailable_count;
-  uint64_t remote_response_forwarded_count;
-  uint64_t remote_deadletter_forwarded_count;
-  size_t drained_route_count;
-  uint64_t control_rejected_count;
-  uint64_t control_invalid_count;
-  uint64_t control_stale_generation_count;
-  uint64_t control_bad_state_count;
-  uint64_t control_io_count;
-  size_t remote_outbound_reply_reserve_slots;
-  uint64_t remote_outbound_reply_reservation_reject_count;
-  uint32_t ingress_overload_mode;
-  uint32_t local_delivery_overload_mode;
-  uint32_t remote_outbound_overload_mode;
-  uint64_t monitor_event_emitted_count;
-  uint64_t monitor_event_dropped_count;
-  uint64_t monitor_event_emitted_lifetime_count;
-  uint64_t monitor_event_dropped_lifetime_count;
-  size_t local_work_queue_capacity;
-  size_t local_work_queue_depth;
-  size_t local_work_queue_high_watermark;
-  uint64_t delivered_request_outbound_direct_write_count;
-  uint64_t response_outbound_direct_write_count;
-  uint64_t deadletter_outbound_direct_write_count;
-  uint64_t remote_outbound_one_way_drop_count;
-} coakka_v2_runtime_stats_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t edition;
-  uint32_t license_status;
-  uint64_t compiled_capabilities;
-  uint64_t entitled_capabilities;
-  uint64_t effective_capabilities;
-  uint32_t tcp_connection_defaults_revision;
-  uint32_t reserved;
-} coakka_v2_runtime_capability_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  uint64_t fields;
-  uint32_t mode;
-  uint32_t reserved;
-  uint32_t max_connections;
-  uint32_t reserved2;
-  uint64_t max_requests_per_connection;
-  uint64_t idle_timeout_ms;
-} coakka_v2_tcp_connection_options_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t code;
-  uint32_t reserved;
-  uint64_t field;
-  uint64_t minimum_value;
-  uint64_t maximum_value;
-} coakka_v2_tcp_connection_validation_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t defaults_revision;
-  uint32_t mode;
-  uint64_t applicable_fields;
-  uint64_t explicitly_configured_fields;
-  uint64_t defaulted_fields;
-  uint64_t configurable_fields;
-  uint32_t max_connections;
-  uint32_t reserved;
-  uint64_t max_requests_per_connection;
-  uint64_t idle_timeout_ms;
-} coakka_v2_tcp_connection_config_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  uint64_t fields;
-  uint32_t mode;
-  uint32_t credential_source_kind;
-  uint32_t reload_mode;
-  uint32_t reserved;
-  uint64_t credential_generation;
-  const char *credential_id;
-  const char *ca_certificate_file;
-  const char *identity_certificate_file;
-  const char *private_key_file;
-} coakka_v2_tcp_security_options_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t code;
-  uint32_t reserved;
-  uint64_t field;
-} coakka_v2_tcp_security_validation_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t mode;
-  uint32_t credential_source_kind;
-  uint32_t reload_mode;
-  uint32_t reload_status;
-  uint64_t credential_generation;
-  const char *credential_id;
-} coakka_v2_tcp_security_config_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t minimum_protocol_version;
-  uint32_t maximum_protocol_version;
-  uint64_t inbound_verification_flags;
-  uint64_t outbound_verification_flags;
-  int64_t identity_not_before_unix_seconds;
-  int64_t identity_not_after_unix_seconds;
-  char credential_id_value[128];
-  char identity_fingerprint_sha256[65];
-} coakka_v2_tcp_security_identity_info_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_tcp_security_config_snapshot_t config;
-  coakka_v2_tcp_security_identity_info_t identity;
-} coakka_v2_tcp_security_info_t;
-
-typedef struct {
-  size_t struct_size;
-  int32_t apply_status;
-  uint32_t changed;
-  uint32_t reason;
-  uint32_t runtime_state;
-  coakka_v2_tcp_connection_validation_t validation;
-  coakka_v2_tcp_connection_config_snapshot_t effective_config;
-} coakka_v2_tcp_connection_apply_result_t;
-
-typedef struct {
-  size_t struct_size;
-  int32_t apply_status;
-  uint32_t changed;
-  uint32_t reason;
-  uint32_t runtime_state;
-  coakka_v2_tcp_security_validation_t validation;
-  coakka_v2_tcp_security_info_t active_security;
-} coakka_v2_tcp_security_apply_result_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t mode;
-  uint32_t reserved;
-  uint64_t credential_generation;
-  const char *credential_id;
-  const char *ca_certificate_file;
-  const char *identity_certificate_file;
-  const char *private_key_file;
-} coakka_v2_file_lane_security_config_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t flags;
-  const char *bind_host;
-  uint16_t bind_port;
-  size_t queue_capacity;
-  uint64_t max_file_size;
-  uint32_t io_timeout_ms;
-  uint64_t checkpoint_bytes;
-  uint64_t progress_bytes;
-  uint32_t progress_interval_ms;
-  uint32_t sender_worker_count;
-  uint32_t receiver_worker_count;
-  const coakka_v2_file_lane_security_config_t *security;
-} coakka_v2_file_lane_config_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *owner_instance_id;
-  const char *advertised_host;
-} coakka_v2_lane_owner_config_t;
-
-typedef struct {
-  size_t struct_size;
-  uint16_t port;
-  uint16_t reserved;
-  char owner_instance_id[128];
-  char advertised_host[256];
-} coakka_v2_lane_owner_endpoint_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_file_lane_config_t lane;
-  coakka_v2_lane_owner_config_t owner;
-} coakka_v2_file_lane_owned_config_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *transfer_id;
-  const char *authorization_token;
-  const char *destination_path;
-  uint64_t expected_size;
-  uint8_t expected_sha256[32];
-} coakka_v2_file_receive_spec_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_lane_owner_endpoint_t owner;
-  char transfer_id[65];
-  char authorization_token[129];
-  uint64_t expected_size;
-  uint8_t expected_sha256[32];
-} coakka_v2_file_receive_grant_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *transfer_id;
-  const char *authorization_token;
-  const char *remote_host;
-  uint16_t remote_port;
-  const char *source_path;
-  uint64_t expected_size;
-  uint8_t expected_sha256[32];
-  uint32_t timeout_ms;
-} coakka_v2_file_send_spec_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t direction;
-  uint32_t state;
-  uint32_t result;
-  uint64_t expected_size;
-  uint64_t transferred_bytes;
-  uint64_t committed_offset;
-  uint32_t progress_milli;
-  uint32_t cancel_requested;
-  uint64_t update_sequence;
-  uint64_t submitted_mono_ns;
-  uint64_t started_mono_ns;
-  uint64_t updated_mono_ns;
-  uint64_t terminal_mono_ns;
-  char detail[160];
-} coakka_v2_file_transfer_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  size_t queue_capacity;
-  size_t queued_sends;
-  size_t prepared_receives;
-  size_t active_sends;
-  size_t active_receives;
-  size_t retained_records;
-  uint64_t submitted_sends;
-  uint64_t prepared_receive_count;
-  uint64_t completed_sends;
-  uint64_t completed_receives;
-  uint64_t failed_sends;
-  uint64_t failed_receives;
-  uint64_t canceled_transfers;
-  uint64_t completed_send_bytes;
-  uint64_t completed_receive_bytes;
-} coakka_v2_file_lane_stats_t;
-
-typedef struct {
-  size_t struct_size;
-  uint64_t sequence;
-  uint64_t captured_mono_ns;
-  uint64_t dropped_before;
-  uint32_t flags;
-  size_t size;
-} coakka_v2_stream_frame_t;
-
-typedef int (*coakka_v2_stream_source_next_fn)(void *, uint8_t *, size_t,
-                                                coakka_v2_stream_frame_t *);
-typedef int (*coakka_v2_stream_consumer_fn)(void *, const uint8_t *,
-                                             const coakka_v2_stream_frame_t *);
-
-typedef struct {
-  size_t struct_size;
-  uint32_t mode;
-  uint32_t reserved;
-  uint64_t credential_generation;
-  const char *credential_id;
-  const char *ca_certificate_file;
-  const char *identity_certificate_file;
-  const char *private_key_file;
-} coakka_v2_stream_lane_security_config_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t flags;
-  const char *bind_host;
-  uint16_t bind_port;
-  size_t capacity;
-  uint32_t max_frame_bytes;
-  uint32_t max_window_bytes;
-  uint32_t io_timeout_ms;
-  uint32_t source_retry_ms;
-  uint32_t progress_frames;
-  uint32_t progress_interval_ms;
-  uint32_t publisher_worker_count;
-  uint32_t subscriber_worker_count;
-  const coakka_v2_stream_lane_security_config_t *security;
-  uint32_t pressure_after_ms;
-  uint32_t stalled_after_ms;
-  uint32_t recovery_after_ms;
-  uint32_t pressure_observation_ms;
-} coakka_v2_stream_lane_config_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_stream_lane_config_t lane;
-  coakka_v2_lane_owner_config_t owner;
-} coakka_v2_stream_lane_owned_config_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *session_id;
-  const char *authorization_token;
-  uint64_t format_id;
-  uint32_t max_frame_bytes;
-  coakka_v2_stream_source_next_fn source_next;
-  void *source_context;
-} coakka_v2_stream_publish_spec_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_lane_owner_endpoint_t owner;
-  char session_id[65];
-  char authorization_token[129];
-  uint64_t format_id;
-  uint32_t max_frame_bytes;
-  uint32_t reserved;
-} coakka_v2_stream_publish_grant_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *session_id;
-  const char *authorization_token;
-  const char *remote_host;
-  uint16_t remote_port;
-  uint64_t format_id;
-  uint32_t max_frame_bytes;
-  uint32_t initial_window_bytes;
-  uint32_t timeout_ms;
-  coakka_v2_stream_consumer_fn consume;
-  void *consumer_context;
-} coakka_v2_stream_subscribe_spec_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t direction;
-  uint32_t state;
-  uint32_t result;
-  uint64_t format_id;
-  uint64_t frames;
-  uint64_t bytes;
-  uint64_t dropped_frames;
-  uint64_t last_sequence;
-  uint32_t negotiated_max_frame_bytes;
-  uint32_t window_bytes;
-  uint32_t cancel_requested;
-  uint64_t update_sequence;
-  uint64_t submitted_mono_ns;
-  uint64_t started_mono_ns;
-  uint64_t updated_mono_ns;
-  uint64_t terminal_mono_ns;
-  char detail[160];
-} coakka_v2_stream_session_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t direction;
-  uint32_t state;
-  uint32_t reason_bits;
-  uint32_t available_credit_bytes;
-  uint32_t window_capacity_bytes;
-  uint64_t update_sequence;
-  uint64_t transition_count;
-  uint64_t observed_mono_ns;
-  uint64_t state_started_mono_ns;
-  uint64_t pressure_started_mono_ns;
-  uint64_t last_progress_mono_ns;
-  uint64_t observed_delivery_bps;
-  uint64_t current_operation_ns;
-  uint64_t last_operation_ns;
-  uint64_t total_pressured_ns;
-  uint64_t max_pressured_ns;
-} coakka_v2_stream_pressure_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  size_t capacity;
-  size_t queued_subscribers;
-  size_t prepared_publishers;
-  size_t active_publishers;
-  size_t active_subscribers;
-  size_t retained_records;
-  uint64_t submitted_subscribers;
-  uint64_t prepared_publisher_count;
-  uint64_t ended_publishers;
-  uint64_t ended_subscribers;
-  uint64_t failed_publishers;
-  uint64_t failed_subscribers;
-  uint64_t canceled_sessions;
-  uint64_t published_frames;
-  uint64_t published_bytes;
-  uint64_t consumed_frames;
-  uint64_t consumed_bytes;
-  uint64_t source_reported_drops;
-} coakka_v2_stream_lane_stats_t;
-
-typedef uint32_t (*coakka_v2_runtime_get_abi_version_fn)(void);
-typedef int (*coakka_v2_runtime_get_info_fn)(coakka_v2_runtime_info_t *out_info);
-typedef int (*coakka_v2_runtime_get_config_fn)(coakka_v2_runtime_t *rt, coakka_v2_runtime_config_view_t *out_config);
-typedef int (*coakka_v2_runtime_get_capabilities_fn)(coakka_v2_runtime_capability_snapshot_t *out_capabilities);
-typedef coakka_v2_runtime_t *(*coakka_v2_runtime_create_fn)(const coakka_v2_runtime_config_t *cfg);
-typedef void (*coakka_v2_runtime_destroy_fn)(coakka_v2_runtime_t *rt);
-typedef int (*coakka_v2_runtime_apply_network_options_fn)(coakka_v2_runtime_t *rt, const coakka_v2_network_options_t *options);
-typedef int (*coakka_v2_runtime_get_host_handles_fn)(coakka_v2_runtime_t *rt, coakka_v2_host_handles_t *out_handles);
-typedef int (*coakka_v2_runtime_start_fn)(coakka_v2_runtime_t *rt);
-typedef int (*coakka_v2_runtime_stop_fn)(coakka_v2_runtime_t *rt);
-typedef int (*coakka_v2_runtime_get_health_fn)(coakka_v2_runtime_t *rt, coakka_v2_runtime_health_t *out_health);
-typedef int (*coakka_v2_runtime_get_stats_fn)(coakka_v2_runtime_t *rt, coakka_v2_runtime_stats_t *out_stats);
-typedef int (*coakka_v2_runtime_submit_envelope_fn)(coakka_v2_runtime_t *rt, const uint8_t *buf, size_t len);
-typedef int (*coakka_v2_runtime_apply_control_envelope_fn)(coakka_v2_runtime_t *rt, const uint8_t *buf, size_t len);
-typedef int (*coakka_v2_monitor_consume_fn)(int fd, uint64_t *out_signal_count);
-typedef int (*coakka_v2_runtime_apply_tcp_connection_options_ex_fn)(coakka_v2_runtime_t *rt, const coakka_v2_tcp_connection_options_t *options, coakka_v2_tcp_connection_apply_result_t *out_result);
-typedef int (*coakka_v2_runtime_get_tcp_connection_config_fn)(coakka_v2_runtime_t *rt, coakka_v2_tcp_connection_config_snapshot_t *out_config);
-typedef int (*coakka_v2_runtime_apply_tcp_security_options_ex_fn)(coakka_v2_runtime_t *rt, const coakka_v2_tcp_security_options_t *options, coakka_v2_tcp_security_apply_result_t *out_result);
-typedef int (*coakka_v2_runtime_get_tcp_security_info_fn)(coakka_v2_runtime_t *rt, coakka_v2_tcp_security_info_t *out_info);
-typedef const char *(*coakka_v2_transport_apply_reason_name_fn)(uint32_t reason);
-typedef int (*coakka_v2_file_lane_create_ex_fn)(const coakka_v2_file_lane_config_t *, coakka_v2_file_lane_t **);
-typedef int (*coakka_v2_file_lane_create_owned_ex_fn)(const coakka_v2_file_lane_owned_config_t *, coakka_v2_file_lane_t **);
-typedef void (*coakka_v2_file_lane_destroy_fn)(coakka_v2_file_lane_t *);
-typedef int (*coakka_v2_file_lane_start_fn)(coakka_v2_file_lane_t *);
-typedef int (*coakka_v2_file_lane_stop_fn)(coakka_v2_file_lane_t *);
-typedef int (*coakka_v2_file_lane_get_bound_port_fn)(coakka_v2_file_lane_t *, uint16_t *);
-typedef int (*coakka_v2_file_lane_prepare_receive_fn)(coakka_v2_file_lane_t *, const coakka_v2_file_receive_spec_t *);
-typedef int (*coakka_v2_file_lane_prepare_receive_grant_fn)(coakka_v2_file_lane_t *, const coakka_v2_file_receive_spec_t *, coakka_v2_file_receive_grant_t *);
-typedef int (*coakka_v2_file_lane_submit_send_fn)(coakka_v2_file_lane_t *, const coakka_v2_file_send_spec_t *);
-typedef int (*coakka_v2_file_lane_get_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t, coakka_v2_file_transfer_snapshot_t *);
-typedef int (*coakka_v2_file_lane_wait_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_file_transfer_snapshot_t *);
-typedef int (*coakka_v2_file_lane_cancel_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t);
-typedef int (*coakka_v2_file_lane_forget_transfer_fn)(coakka_v2_file_lane_t *, const char *, uint32_t);
-typedef int (*coakka_v2_file_lane_get_stats_fn)(coakka_v2_file_lane_t *, coakka_v2_file_lane_stats_t *);
-typedef int (*coakka_v2_file_sha256_path_fn)(const char *, uint8_t[32], uint64_t *);
-typedef int (*coakka_v2_stream_lane_create_ex_fn)(const coakka_v2_stream_lane_config_t *, coakka_v2_stream_lane_t **);
-typedef int (*coakka_v2_stream_lane_create_owned_ex_fn)(const coakka_v2_stream_lane_owned_config_t *, coakka_v2_stream_lane_t **);
-typedef void (*coakka_v2_stream_lane_destroy_fn)(coakka_v2_stream_lane_t *);
-typedef int (*coakka_v2_stream_lane_start_fn)(coakka_v2_stream_lane_t *);
-typedef int (*coakka_v2_stream_lane_stop_fn)(coakka_v2_stream_lane_t *);
-typedef int (*coakka_v2_stream_lane_get_bound_port_fn)(coakka_v2_stream_lane_t *, uint16_t *);
-typedef int (*coakka_v2_stream_lane_prepare_publish_fn)(coakka_v2_stream_lane_t *, const coakka_v2_stream_publish_spec_t *);
-typedef int (*coakka_v2_stream_lane_prepare_publish_grant_fn)(coakka_v2_stream_lane_t *, const coakka_v2_stream_publish_spec_t *, coakka_v2_stream_publish_grant_t *);
-typedef int (*coakka_v2_stream_lane_subscribe_fn)(coakka_v2_stream_lane_t *, const coakka_v2_stream_subscribe_spec_t *);
-typedef int (*coakka_v2_stream_lane_get_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_session_snapshot_t *);
-typedef int (*coakka_v2_stream_lane_wait_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_session_snapshot_t *);
-typedef int (*coakka_v2_stream_lane_get_pressure_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_pressure_snapshot_t *);
-typedef int (*coakka_v2_stream_lane_wait_pressure_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_pressure_snapshot_t *);
-typedef int (*coakka_v2_stream_lane_cancel_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t);
-typedef int (*coakka_v2_stream_lane_forget_session_fn)(coakka_v2_stream_lane_t *, const char *, uint32_t);
-typedef int (*coakka_v2_stream_lane_get_stats_fn)(coakka_v2_stream_lane_t *, coakka_v2_stream_lane_stats_t *);
-
-typedef struct coakka_v2_go_bindings_t {
-  void *handle;
-  coakka_v2_runtime_get_abi_version_fn get_abi_version;
-  coakka_v2_runtime_get_info_fn get_info;
-  coakka_v2_runtime_get_config_fn get_config;
-  coakka_v2_runtime_get_capabilities_fn get_capabilities;
-  coakka_v2_runtime_create_fn create_runtime;
-  coakka_v2_runtime_destroy_fn destroy_runtime;
-  coakka_v2_runtime_apply_network_options_fn apply_network_options;
-  coakka_v2_runtime_get_host_handles_fn get_host_handles;
-  coakka_v2_runtime_start_fn start_runtime;
-  coakka_v2_runtime_stop_fn stop_runtime;
-  coakka_v2_runtime_get_health_fn get_health;
-  coakka_v2_runtime_get_stats_fn get_stats;
-  coakka_v2_runtime_submit_envelope_fn submit_envelope;
-  coakka_v2_runtime_apply_control_envelope_fn apply_control_envelope;
-  coakka_v2_monitor_consume_fn monitor_consume;
-  coakka_v2_runtime_apply_tcp_connection_options_ex_fn apply_tcp_connection_options_ex;
-  coakka_v2_runtime_get_tcp_connection_config_fn get_tcp_connection_config;
-  coakka_v2_runtime_apply_tcp_security_options_ex_fn apply_tcp_security_options_ex;
-  coakka_v2_runtime_get_tcp_security_info_fn get_tcp_security_info;
-  coakka_v2_transport_apply_reason_name_fn transport_apply_reason_name;
-  coakka_v2_file_lane_create_ex_fn file_lane_create_ex;
-  coakka_v2_file_lane_create_owned_ex_fn file_lane_create_owned_ex;
-  coakka_v2_file_lane_destroy_fn file_lane_destroy;
-  coakka_v2_file_lane_start_fn file_lane_start;
-  coakka_v2_file_lane_stop_fn file_lane_stop;
-  coakka_v2_file_lane_get_bound_port_fn file_lane_get_bound_port;
-  coakka_v2_file_lane_prepare_receive_fn file_lane_prepare_receive;
-  coakka_v2_file_lane_prepare_receive_grant_fn file_lane_prepare_receive_grant;
-  coakka_v2_file_lane_submit_send_fn file_lane_submit_send;
-  coakka_v2_file_lane_get_transfer_fn file_lane_get_transfer;
-  coakka_v2_file_lane_wait_transfer_fn file_lane_wait_transfer;
-  coakka_v2_file_lane_cancel_transfer_fn file_lane_cancel_transfer;
-  coakka_v2_file_lane_forget_transfer_fn file_lane_forget_transfer;
-  coakka_v2_file_lane_get_stats_fn file_lane_get_stats;
-  coakka_v2_file_sha256_path_fn file_sha256_path;
-  coakka_v2_stream_lane_create_ex_fn stream_lane_create_ex;
-  coakka_v2_stream_lane_create_owned_ex_fn stream_lane_create_owned_ex;
-  coakka_v2_stream_lane_destroy_fn stream_lane_destroy;
-  coakka_v2_stream_lane_start_fn stream_lane_start;
-  coakka_v2_stream_lane_stop_fn stream_lane_stop;
-  coakka_v2_stream_lane_get_bound_port_fn stream_lane_get_bound_port;
-  coakka_v2_stream_lane_prepare_publish_fn stream_lane_prepare_publish;
-  coakka_v2_stream_lane_prepare_publish_grant_fn stream_lane_prepare_publish_grant;
-  coakka_v2_stream_lane_subscribe_fn stream_lane_subscribe;
-  coakka_v2_stream_lane_get_session_fn stream_lane_get_session;
-  coakka_v2_stream_lane_wait_session_fn stream_lane_wait_session;
-  coakka_v2_stream_lane_get_pressure_fn stream_lane_get_pressure;
-  coakka_v2_stream_lane_wait_pressure_fn stream_lane_wait_pressure;
-  coakka_v2_stream_lane_cancel_session_fn stream_lane_cancel_session;
-  coakka_v2_stream_lane_forget_session_fn stream_lane_forget_session;
-  coakka_v2_stream_lane_get_stats_fn stream_lane_get_stats;
-} coakka_v2_go_bindings_t;
-
-static void *coakka_v2_go_process_library_handle = NULL;
-static char *coakka_v2_go_process_library_path = NULL;
-
-static char *coakka_v2_go_duplicate_text(const char *value) {
-  if (value == NULL) {
-    return NULL;
-  }
-  const size_t size = strlen(value) + 1u;
-  char *copy = (char *)malloc(size);
-  if (copy != NULL) {
-    memcpy(copy, value, size);
-  }
-  return copy;
-}
-
-extern int coakka_v2_go_stream_source_next(uintptr_t context,
-                                            uint8_t *destination,
-                                            size_t capacity,
-                                            coakka_v2_stream_frame_t *out_frame);
-extern int coakka_v2_go_stream_consume(uintptr_t context, const uint8_t *data,
-                                       const coakka_v2_stream_frame_t *frame);
-
-static int coakka_v2_go_stream_source_trampoline(
-    void *context, uint8_t *destination, size_t capacity,
-    coakka_v2_stream_frame_t *out_frame) {
-  return coakka_v2_go_stream_source_next((uintptr_t)context, destination,
-                                          capacity, out_frame);
-}
-
-static int coakka_v2_go_stream_consumer_trampoline(
-    void *context, const uint8_t *data,
-    const coakka_v2_stream_frame_t *frame) {
-  return coakka_v2_go_stream_consume((uintptr_t)context, data, frame);
-}
-
-#ifdef _WIN32
-static char *coakka_v2_go_windows_error(const char *operation) {
-  char message[128];
-  snprintf(message, sizeof(message), "%s failed win32_error=%lu", operation,
-           (unsigned long)GetLastError());
-  return coakka_v2_go_duplicate_text(message);
-}
-#endif
-
-static int coakka_v2_go_load_symbol(void *handle, void **out_symbol, const char *symbol_name, char **error_out) {
-#ifdef _WIN32
-  FARPROC symbol = GetProcAddress((HMODULE)handle, symbol_name);
-  if (symbol == NULL) {
-    if (error_out != NULL) {
-      *error_out = coakka_v2_go_windows_error("GetProcAddress");
-    }
-    return -1;
-  }
-  *out_symbol = (void *)(uintptr_t)symbol;
-#else
-  dlerror();
-  *out_symbol = dlsym(handle, symbol_name);
-  const char *error = dlerror();
-  if (error != NULL) {
-    if (error_out != NULL) {
-      *error_out = coakka_v2_go_duplicate_text(error);
-    }
-    return -1;
-  }
-#endif
-  return 0;
-}
-
-static coakka_v2_go_bindings_t *coakka_v2_go_open_library(const char *path, char **error_out) {
-  int opened_new_library = 0;
-  void *handle = NULL;
-  if (coakka_v2_go_process_library_handle != NULL) {
-    if (coakka_v2_go_process_library_path == NULL ||
-        strcmp(coakka_v2_go_process_library_path, path) != 0) {
-      if (error_out != NULL) {
-        *error_out = coakka_v2_go_duplicate_text(
-            "a different CoAkka runtime library is already loaded in this process");
-      }
-      return NULL;
-    }
-    handle = coakka_v2_go_process_library_handle;
-  } else {
-#ifdef _WIN32
-    handle = (void *)LoadLibraryA(path);
-#else
-    handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-#endif
-    if (handle == NULL) {
-      if (error_out != NULL) {
-#ifdef _WIN32
-        *error_out = coakka_v2_go_windows_error("LoadLibraryA");
-#else
-        const char *error = dlerror();
-        *error_out = error == NULL
-            ? coakka_v2_go_duplicate_text("dlopen failed")
-            : coakka_v2_go_duplicate_text(error);
-#endif
-      }
-      return NULL;
-    }
-    coakka_v2_go_process_library_path = coakka_v2_go_duplicate_text(path);
-    if (coakka_v2_go_process_library_path == NULL) {
-      if (error_out != NULL) {
-        *error_out = coakka_v2_go_duplicate_text("runtime path allocation failed");
-      }
-#ifdef _WIN32
-      FreeLibrary((HMODULE)handle);
-#else
-      dlclose(handle);
-#endif
-      return NULL;
-    }
-    coakka_v2_go_process_library_handle = handle;
-    opened_new_library = 1;
-  }
-
-  coakka_v2_go_bindings_t *bindings = (coakka_v2_go_bindings_t *)calloc(1, sizeof(coakka_v2_go_bindings_t));
-  if (bindings == NULL) {
-    if (error_out != NULL) {
-      *error_out = coakka_v2_go_duplicate_text("calloc failed");
-    }
-    if (opened_new_library) {
-#ifdef _WIN32
-      FreeLibrary((HMODULE)handle);
-#else
-      dlclose(handle);
-#endif
-      free(coakka_v2_go_process_library_path);
-      coakka_v2_go_process_library_path = NULL;
-      coakka_v2_go_process_library_handle = NULL;
-    }
-    return NULL;
-  }
-
-  bindings->handle = handle;
-  if (coakka_v2_go_load_symbol(handle, (void **)&bindings->get_abi_version, "coakka_v2_runtime_get_abi_version", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_info, "coakka_v2_runtime_get_info", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_config, "coakka_v2_runtime_get_config", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_capabilities, "coakka_v2_runtime_get_capabilities", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->create_runtime, "coakka_v2_runtime_create", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->destroy_runtime, "coakka_v2_runtime_destroy", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->apply_network_options, "coakka_v2_runtime_apply_network_options", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_host_handles, "coakka_v2_runtime_get_host_handles", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->start_runtime, "coakka_v2_runtime_start", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->stop_runtime, "coakka_v2_runtime_stop", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_health, "coakka_v2_runtime_get_health", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_stats, "coakka_v2_runtime_get_stats", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->submit_envelope, "coakka_v2_runtime_submit_envelope", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->apply_control_envelope, "coakka_v2_runtime_apply_control_envelope", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->monitor_consume, "coakka_v2_monitor_consume", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->apply_tcp_connection_options_ex, "coakka_v2_runtime_apply_tcp_connection_options_ex", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_tcp_connection_config, "coakka_v2_runtime_get_tcp_connection_config", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->apply_tcp_security_options_ex, "coakka_v2_runtime_apply_tcp_security_options_ex", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->get_tcp_security_info, "coakka_v2_runtime_get_tcp_security_info", error_out) != 0 ||
-      coakka_v2_go_load_symbol(handle, (void **)&bindings->transport_apply_reason_name, "coakka_v2_transport_apply_reason_name", error_out) != 0) {
-    if (opened_new_library) {
-#ifdef _WIN32
-      FreeLibrary((HMODULE)handle);
-#else
-      dlclose(handle);
-#endif
-      free(coakka_v2_go_process_library_path);
-      coakka_v2_go_process_library_path = NULL;
-      coakka_v2_go_process_library_handle = NULL;
-    }
-    free(bindings);
-    return NULL;
-  }
-
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_create_ex, "coakka_v2_file_lane_create_ex", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_destroy, "coakka_v2_file_lane_destroy", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_start, "coakka_v2_file_lane_start", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_stop, "coakka_v2_file_lane_stop", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_bound_port, "coakka_v2_file_lane_get_bound_port", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_prepare_receive, "coakka_v2_file_lane_prepare_receive", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_submit_send, "coakka_v2_file_lane_submit_send", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_transfer, "coakka_v2_file_lane_get_transfer", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_wait_transfer, "coakka_v2_file_lane_wait_transfer", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_cancel_transfer, "coakka_v2_file_lane_cancel_transfer", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_forget_transfer, "coakka_v2_file_lane_forget_transfer", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_lane_get_stats, "coakka_v2_file_lane_get_stats", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->file_sha256_path, "coakka_v2_file_sha256_path", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_create_ex, "coakka_v2_stream_lane_create_ex", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_destroy, "coakka_v2_stream_lane_destroy", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_start, "coakka_v2_stream_lane_start", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_stop, "coakka_v2_stream_lane_stop", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_bound_port, "coakka_v2_stream_lane_get_bound_port", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_prepare_publish, "coakka_v2_stream_lane_prepare_publish", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_subscribe, "coakka_v2_stream_lane_subscribe", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_session, "coakka_v2_stream_lane_get_session", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_wait_session, "coakka_v2_stream_lane_wait_session", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_pressure, "coakka_v2_stream_lane_get_pressure", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_wait_pressure, "coakka_v2_stream_lane_wait_pressure", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_cancel_session, "coakka_v2_stream_lane_cancel_session", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_forget_session, "coakka_v2_stream_lane_forget_session", NULL);
-  coakka_v2_go_load_symbol(handle, (void **)&bindings->stream_lane_get_stats, "coakka_v2_stream_lane_get_stats", NULL);
-
-  return bindings;
-}
-
-static void coakka_v2_go_close_library(coakka_v2_go_bindings_t *bindings) {
-  if (bindings == NULL) {
-    return;
-  }
-  free(bindings);
-}
-
-static uint32_t coakka_v2_go_get_abi_version(coakka_v2_go_bindings_t *bindings) {
-  return bindings->get_abi_version();
-}
-
-static int coakka_v2_go_get_info(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_info_t *out_info) {
-  return bindings->get_info(out_info);
-}
-
-static int coakka_v2_go_get_config(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_runtime_config_view_t *out_config) {
-  return bindings->get_config(rt, out_config);
-}
-
-static int coakka_v2_go_get_capabilities(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_capability_snapshot_t *out_capabilities) {
-  return bindings->get_capabilities(out_capabilities);
-}
-
-static coakka_v2_runtime_t *coakka_v2_go_create_runtime(coakka_v2_go_bindings_t *bindings, const coakka_v2_runtime_config_t *cfg) {
-  return bindings->create_runtime(cfg);
-}
-
-static void coakka_v2_go_destroy_runtime(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt) {
-  bindings->destroy_runtime(rt);
-}
-
-static int coakka_v2_go_apply_network_options(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, const coakka_v2_network_options_t *options) {
-  return bindings->apply_network_options(rt, options);
-}
-
-static int coakka_v2_go_get_host_handles(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_host_handles_t *out_handles) {
-  return bindings->get_host_handles(rt, out_handles);
-}
-
-static int coakka_v2_go_start_runtime(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt) {
-  return bindings->start_runtime(rt);
-}
-
-static int coakka_v2_go_stop_runtime(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt) {
-  return bindings->stop_runtime(rt);
-}
-
-static int coakka_v2_go_get_health(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_runtime_health_t *out_health) {
-  return bindings->get_health(rt, out_health);
-}
-
-static int coakka_v2_go_get_stats(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_runtime_stats_t *out_stats) {
-  return bindings->get_stats(rt, out_stats);
-}
-
-static int coakka_v2_go_submit_envelope(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, const uint8_t *buf, size_t len) {
-  return bindings->submit_envelope(rt, buf, len);
-}
-
-static int coakka_v2_go_apply_control_envelope(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, const uint8_t *buf, size_t len) {
-  return bindings->apply_control_envelope(rt, buf, len);
-}
-
-static int coakka_v2_go_monitor_consume(coakka_v2_go_bindings_t *bindings, int fd, uint64_t *out_signal_count) {
-  return bindings->monitor_consume(fd, out_signal_count);
-}
-
-static int coakka_v2_go_apply_tcp_connection_options_ex(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, const coakka_v2_tcp_connection_options_t *options, coakka_v2_tcp_connection_apply_result_t *out_result) {
-  return bindings->apply_tcp_connection_options_ex(rt, options, out_result);
-}
-
-static int coakka_v2_go_get_tcp_connection_config(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_tcp_connection_config_snapshot_t *out_config) {
-  return bindings->get_tcp_connection_config(rt, out_config);
-}
-
-static int coakka_v2_go_apply_tcp_security_options_ex(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, const coakka_v2_tcp_security_options_t *options, coakka_v2_tcp_security_apply_result_t *out_result) {
-  return bindings->apply_tcp_security_options_ex(rt, options, out_result);
-}
-
-static int coakka_v2_go_get_tcp_security_info(coakka_v2_go_bindings_t *bindings, coakka_v2_runtime_t *rt, coakka_v2_tcp_security_info_t *out_info) {
-  return bindings->get_tcp_security_info(rt, out_info);
-}
-
-static const char *coakka_v2_go_transport_apply_reason_name(coakka_v2_go_bindings_t *bindings, uint32_t reason) {
-  return bindings->transport_apply_reason_name(reason);
-}
-
-static int coakka_v2_go_file_lane_available(coakka_v2_go_bindings_t *bindings) {
-  return bindings != NULL &&
-    bindings->file_lane_create_ex != NULL &&
-    bindings->file_lane_destroy != NULL &&
-    bindings->file_lane_start != NULL &&
-    bindings->file_lane_stop != NULL &&
-    bindings->file_lane_get_bound_port != NULL &&
-    bindings->file_lane_prepare_receive != NULL &&
-    bindings->file_lane_submit_send != NULL &&
-    bindings->file_lane_get_transfer != NULL &&
-    bindings->file_lane_wait_transfer != NULL &&
-    bindings->file_lane_cancel_transfer != NULL &&
-    bindings->file_lane_forget_transfer != NULL &&
-    bindings->file_lane_get_stats != NULL &&
-    bindings->file_sha256_path != NULL;
-}
-static int coakka_v2_go_load_file_owner_grants(coakka_v2_go_bindings_t *b, char **error_out) {
-  if (b == NULL) return -1;
-  if (b->file_lane_create_owned_ex != NULL && b->file_lane_prepare_receive_grant != NULL) return 0;
-  if (coakka_v2_go_load_symbol(b->handle, (void **)&b->file_lane_create_owned_ex, "coakka_v2_file_lane_create_owned_ex", error_out) != 0) return -1;
-  if (coakka_v2_go_load_symbol(b->handle, (void **)&b->file_lane_prepare_receive_grant, "coakka_v2_file_lane_prepare_receive_grant", error_out) != 0) return -1;
-  return 0;
-}
-static int coakka_v2_go_file_lane_create_ex(coakka_v2_go_bindings_t *b, const coakka_v2_file_lane_config_t *c, coakka_v2_file_lane_t **out) { return b->file_lane_create_ex(c, out); }
-static int coakka_v2_go_file_lane_create_owned_ex(coakka_v2_go_bindings_t *b, const coakka_v2_file_lane_owned_config_t *c, coakka_v2_file_lane_t **out) { return b->file_lane_create_owned_ex(c, out); }
-static void coakka_v2_go_file_lane_destroy(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane) { b->file_lane_destroy(lane); }
-static int coakka_v2_go_file_lane_start(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane) { return b->file_lane_start(lane); }
-static int coakka_v2_go_file_lane_stop(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane) { return b->file_lane_stop(lane); }
-static int coakka_v2_go_file_lane_get_bound_port(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, uint16_t *out) { return b->file_lane_get_bound_port(lane, out); }
-static int coakka_v2_go_file_lane_prepare_receive(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const coakka_v2_file_receive_spec_t *s) { return b->file_lane_prepare_receive(lane, s); }
-static int coakka_v2_go_file_lane_prepare_receive_grant(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const coakka_v2_file_receive_spec_t *s, coakka_v2_file_receive_grant_t *out) { return b->file_lane_prepare_receive_grant(lane, s, out); }
-static int coakka_v2_go_file_lane_submit_send(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const coakka_v2_file_send_spec_t *s) { return b->file_lane_submit_send(lane, s); }
-static int coakka_v2_go_file_lane_get_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d, coakka_v2_file_transfer_snapshot_t *out) { return b->file_lane_get_transfer(lane, id, d, out); }
-static int coakka_v2_go_file_lane_wait_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d, uint64_t seq, uint32_t ms, coakka_v2_file_transfer_snapshot_t *out) { return b->file_lane_wait_transfer(lane, id, d, seq, ms, out); }
-static int coakka_v2_go_file_lane_cancel_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d) { return b->file_lane_cancel_transfer(lane, id, d); }
-static int coakka_v2_go_file_lane_forget_transfer(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, const char *id, uint32_t d) { return b->file_lane_forget_transfer(lane, id, d); }
-static int coakka_v2_go_file_lane_get_stats(coakka_v2_go_bindings_t *b, coakka_v2_file_lane_t *lane, coakka_v2_file_lane_stats_t *out) { return b->file_lane_get_stats(lane, out); }
-static int coakka_v2_go_file_sha256_path(coakka_v2_go_bindings_t *b, const char *path, uint8_t out[32], uint64_t *size) { return b->file_sha256_path(path, out, size); }
-
-int coakka_v2_go_stream_lane_available(coakka_v2_go_bindings_t *b) {
-  return b != NULL && b->stream_lane_create_ex != NULL &&
-    b->stream_lane_destroy != NULL && b->stream_lane_start != NULL &&
-    b->stream_lane_stop != NULL && b->stream_lane_get_bound_port != NULL &&
-    b->stream_lane_prepare_publish != NULL && b->stream_lane_subscribe != NULL &&
-    b->stream_lane_get_session != NULL && b->stream_lane_wait_session != NULL &&
-    b->stream_lane_get_pressure != NULL && b->stream_lane_wait_pressure != NULL &&
-    b->stream_lane_cancel_session != NULL && b->stream_lane_forget_session != NULL &&
-    b->stream_lane_get_stats != NULL;
-}
-int coakka_v2_go_load_stream_owner_grants(coakka_v2_go_bindings_t *b, char **error_out) {
-  if (b == NULL) return -1;
-  if (b->stream_lane_create_owned_ex != NULL && b->stream_lane_prepare_publish_grant != NULL) return 0;
-  if (coakka_v2_go_load_symbol(b->handle, (void **)&b->stream_lane_create_owned_ex, "coakka_v2_stream_lane_create_owned_ex", error_out) != 0) return -1;
-  if (coakka_v2_go_load_symbol(b->handle, (void **)&b->stream_lane_prepare_publish_grant, "coakka_v2_stream_lane_prepare_publish_grant", error_out) != 0) return -1;
-  return 0;
-}
-int coakka_v2_go_stream_lane_create_ex(coakka_v2_go_bindings_t *b, const coakka_v2_stream_lane_config_t *c, coakka_v2_stream_lane_t **out) { return b->stream_lane_create_ex(c, out); }
-int coakka_v2_go_stream_lane_create_owned_ex(coakka_v2_go_bindings_t *b, const coakka_v2_stream_lane_owned_config_t *c, coakka_v2_stream_lane_t **out) { return b->stream_lane_create_owned_ex(c, out); }
-void coakka_v2_go_stream_lane_destroy(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane) { b->stream_lane_destroy(lane); }
-int coakka_v2_go_stream_lane_start(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane) { return b->stream_lane_start(lane); }
-int coakka_v2_go_stream_lane_stop(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane) { return b->stream_lane_stop(lane); }
-int coakka_v2_go_stream_lane_get_bound_port(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, uint16_t *out) { return b->stream_lane_get_bound_port(lane, out); }
-int coakka_v2_go_stream_lane_prepare_publish(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, const char *token, uint64_t format, uint32_t max_frame, uintptr_t context) {
-  coakka_v2_stream_publish_spec_t spec = {sizeof(spec), id, token, format, max_frame, coakka_v2_go_stream_source_trampoline, (void *)context};
-  return b->stream_lane_prepare_publish(lane, &spec);
-}
-int coakka_v2_go_stream_lane_prepare_publish_grant(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, const char *token, uint64_t format, uint32_t max_frame, uintptr_t context, coakka_v2_stream_publish_grant_t *out) {
-  coakka_v2_stream_publish_spec_t spec = {sizeof(spec), id, token, format, max_frame, coakka_v2_go_stream_source_trampoline, (void *)context};
-  return b->stream_lane_prepare_publish_grant(lane, &spec, out);
-}
-int coakka_v2_go_stream_lane_subscribe(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, const char *token, const char *host, uint16_t port, uint64_t format, uint32_t max_frame, uint32_t window, uint32_t timeout, uintptr_t context) {
-  coakka_v2_stream_subscribe_spec_t spec = {sizeof(spec), id, token, host, port, format, max_frame, window, timeout, coakka_v2_go_stream_consumer_trampoline, (void *)context};
-  return b->stream_lane_subscribe(lane, &spec);
-}
-int coakka_v2_go_stream_lane_get_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, coakka_v2_stream_session_snapshot_t *out) { return b->stream_lane_get_session(lane, id, direction, out); }
-int coakka_v2_go_stream_lane_wait_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, uint64_t sequence, uint32_t timeout, coakka_v2_stream_session_snapshot_t *out) { return b->stream_lane_wait_session(lane, id, direction, sequence, timeout, out); }
-int coakka_v2_go_stream_lane_get_pressure(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, coakka_v2_stream_pressure_snapshot_t *out) { return b->stream_lane_get_pressure(lane, id, direction, out); }
-int coakka_v2_go_stream_lane_wait_pressure(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction, uint64_t sequence, uint32_t timeout, coakka_v2_stream_pressure_snapshot_t *out) { return b->stream_lane_wait_pressure(lane, id, direction, sequence, timeout, out); }
-int coakka_v2_go_stream_lane_cancel_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction) { return b->stream_lane_cancel_session(lane, id, direction); }
-int coakka_v2_go_stream_lane_forget_session(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, const char *id, uint32_t direction) { return b->stream_lane_forget_session(lane, id, direction); }
-int coakka_v2_go_stream_lane_get_stats(coakka_v2_go_bindings_t *b, coakka_v2_stream_lane_t *lane, coakka_v2_stream_lane_stats_t *out) { return b->stream_lane_get_stats(lane, out); }
-
-static int coakka_v2_go_wait_readable(int fd, int timeout_ms, int *out_ready) {
-  if (out_ready == NULL) {
-    return EINVAL;
-  }
-  *out_ready = 0;
-#ifdef _WIN32
-  const intptr_t raw_handle = _get_osfhandle(fd);
-  if (raw_handle == -1) {
-    return EBADF;
-  }
-  const DWORD wait_ms = timeout_ms < 0 ? INFINITE : (DWORD)timeout_ms;
-  const DWORD result = WaitForSingleObject((HANDLE)raw_handle, wait_ms);
-  if (result == WAIT_OBJECT_0) {
-    *out_ready = 1;
-    return 0;
-  }
-  if (result == WAIT_TIMEOUT) {
-    return 0;
-  }
-  return EIO;
-#else
-  struct pollfd descriptor;
-  memset(&descriptor, 0, sizeof(descriptor));
-  descriptor.fd = fd;
-  descriptor.events = POLLIN;
-  const int result = poll(&descriptor, 1, timeout_ms);
-  if (result < 0) {
-    return errno;
-  }
-  if (result == 0) {
-    return 0;
-  }
-  if ((descriptor.revents & (POLLERR | POLLNVAL)) != 0) {
-    return EIO;
-  }
-  *out_ready = (descriptor.revents & (POLLIN | POLLHUP)) != 0;
-  return 0;
-#endif
-}
-
-static int coakka_v2_go_read_fd(int fd, uint8_t *buffer, size_t length,
-                                size_t *out_read) {
-  if (out_read == NULL || (buffer == NULL && length != 0u)) {
-    return EINVAL;
-  }
-  *out_read = 0u;
-#ifdef _WIN32
-  const unsigned int bounded_length =
-      length > (size_t)INT_MAX ? (unsigned int)INT_MAX : (unsigned int)length;
-  const int result = _read(fd, buffer, bounded_length);
-  if (result < 0) {
-    return errno;
-  }
-  *out_read = (size_t)result;
-#else
-  const ssize_t result = read(fd, buffer, length);
-  if (result < 0) {
-    return errno;
-  }
-  *out_read = (size_t)result;
-#endif
-  return 0;
-}
-
-static int coakka_v2_go_close_fd(int fd) {
-#ifdef _WIN32
-  return _close(fd) == 0 ? 0 : errno;
-#else
-  return close(fd) == 0 ? 0 : errno;
-#endif
-}
-
-static int coakka_v2_go_fd_error_retryable(int error_code) {
-  return error_code == EINTR || error_code == EAGAIN
-#ifdef EWOULDBLOCK
-      || error_code == EWOULDBLOCK
-#endif
-      ;
-}
-
-static int coakka_v2_go_fd_error_terminal(int error_code) {
-  return error_code == EBADF || error_code == EINVAL;
-}
 */
 import "C"
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
-	"time"
 	"unsafe"
 )
 
 const (
 	COAKKAOK                                = 0
+	COAKKAErrInvalidArg                     = -1
+	COAKKAErrNoMem                          = -2
+	COAKKAErrBadState                       = -3
+	COAKKAErrIO                             = -5
+	COAKKAErrWouldBlock                     = -6
+	COAKKAErrClosed                         = -7
 	COAKKAABIVersion                        = 1
-	HostHandlesEnableMonitor         uint32 = 1 << 0
-	HostHandlesSeparateDeliveredLane uint32 = 1 << 1
+	HostHandlesEnableMonitor         uint32 = C.COAKKA_V2_HOST_HANDLES_FLAG_ENABLE_MONITOR
+	HostHandlesSeparateDeliveredLane uint32 = C.COAKKA_V2_HOST_HANDLES_FLAG_SEPARATE_DELIVERED_REQUEST_LANE
+	// C.GoBytes uses C int, independently of Core's configured frame ceiling.
+	maxNativeProjectionBytes      = 1<<31 - 1
+	runtimeFeatureFileLane        = uint32(C.COAKKA_V2_RUNTIME_FEATURE_FILE_LANE)
+	runtimeFeatureStreamLane      = uint32(C.COAKKA_V2_RUNTIME_FEATURE_STREAM_LANE)
+	runtimeFeatureLaneOwnerGrants = uint32(C.COAKKA_V2_RUNTIME_FEATURE_LANE_OWNER_GRANTS)
 )
 
 type RuntimeInfoSnapshot struct {
@@ -1117,8 +39,8 @@ type RuntimeInfoSnapshot struct {
 	FeatureFlags      uint32 `json:"featureFlags"`
 	RuntimeVersion    string `json:"runtimeVersion"`
 	GitCommit         string `json:"gitCommit"`
-	SouthboundBackend string `json:"southboundBackend"`
-	AllocatorBackend  string `json:"allocatorBackend"`
+	TransportProvider string `json:"transportProvider"`
+	AllocatorProvider string `json:"allocatorProvider"`
 	DocsHint          string `json:"docsHint"`
 }
 
@@ -1129,12 +51,47 @@ type RuntimeConfigSnapshot struct {
 	SnapshotPresent                          bool   `json:"snapshotPresent"`
 	AppliedGeneration                        uint64 `json:"appliedGeneration"`
 	RouteCount                               uint64 `json:"routeCount"`
-	SouthboundBindHost                       string `json:"southboundBindHost"`
-	SouthboundBindPort                       uint16 `json:"southboundBindPort"`
+	TransportBindHost                        string `json:"transportBindHost"`
+	TransportBindPort                        uint16 `json:"transportBindPort"`
 	EffectiveIngressOverloadMode             uint32 `json:"effectiveIngressOverloadMode"`
 	EffectiveLocalDeliveryOverloadMode       uint32 `json:"effectiveLocalDeliveryOverloadMode"`
 	EffectiveRemoteOutboundOverloadMode      uint32 `json:"effectiveRemoteOutboundOverloadMode"`
 	EffectiveRemoteOutboundReplyReserveSlots uint64 `json:"effectiveRemoteOutboundReplyReserveSlots"`
+}
+
+type RuntimeStartupCPUInfo struct {
+	RequestedPolicy   uint32    `json:"requestedPolicy"`
+	Supported         bool      `json:"supported"`
+	AvailableCPUCount uint32    `json:"availableCpuCount"`
+	SelectedCPUCount  uint32    `json:"selectedCpuCount"`
+	SelectedCPUIds    [2]uint32 `json:"selectedCpuIds"`
+	StartupApplied    bool      `json:"startupApplied"`
+}
+
+type RuntimeStartupIOInfo struct {
+	Requested  bool  `json:"requested"`
+	Compiled   bool  `json:"compiled"`
+	Probed     bool  `json:"probed"`
+	Supported  bool  `json:"supported"`
+	Effective  bool  `json:"effective"`
+	ProbeError int32 `json:"probeError"`
+}
+
+type RuntimeStartupMonitorInfo struct {
+	Enabled bool `json:"enabled"`
+}
+
+type RuntimeStartupConfigSnapshot struct {
+	DefaultsRevision    uint32                             `json:"defaultsRevision"`
+	DefaultedGroups     uint32                             `json:"defaultedGroups"`
+	StrictNoDrop        bool                               `json:"strictNoDrop"`
+	QueueCapacity       uint32                             `json:"queueCapacity"`
+	RequestMaxFrameSize uint64                             `json:"requestMaxFrameSize"`
+	RuntimeState        uint32                             `json:"runtimeState"`
+	Execution           RuntimeStartupCPUInfo              `json:"execution"`
+	Connection          RuntimeTCPConnectionConfigSnapshot `json:"connection"`
+	IO                  RuntimeStartupIOInfo               `json:"io"`
+	Monitor             RuntimeStartupMonitorInfo          `json:"monitor"`
 }
 
 type RuntimeHealthSnapshot struct {
@@ -1188,10 +145,52 @@ type nativeBindings struct {
 
 type nativeRuntime unsafe.Pointer
 type nativeFileLane unsafe.Pointer
+type nativeRequestReader unsafe.Pointer
+type nativeAskClient unsafe.Pointer
+type nativeAskTicket unsafe.Pointer
+
+const (
+	nativeClientResultResponse   = 1
+	nativeClientResultDeadletter = 2
+)
+
+type nativeDeliveredRequest struct {
+	Frame         []byte
+	Target        []byte
+	TargetCString []byte
+	Payload       []byte
+	OneWay        bool
+}
+
+type nativeCString []byte
+
+func makeNativeCString(name string, value string) (nativeCString, error) {
+	if err := validateNativeText([2]string{name, value}); err != nil {
+		return nil, err
+	}
+	encoded := make(nativeCString, len(value)+1)
+	copy(encoded, value)
+	return encoded, nil
+}
 
 var nativeLibraryMu sync.Mutex
 
+func validateNativeLibraryPath(path string) error {
+	if err := validateNativeText([2]string{"runtime library path", path}); err != nil {
+		return err
+	}
+	// This is the connector-owned loader representation, not Core policy.
+	// Refuse before C.CString allocates; the C owner also checks the wide size.
+	if runtime.GOOS == "windows" && len(path) > C.COAKKA_GO_WINDOWS_LIBRARY_PATH_MAX_BYTES {
+		return fmt.Errorf("runtime library path exceeds Windows loader representation bound")
+	}
+	return nil
+}
+
 func openNativeBindings(path string) (*nativeBindings, error) {
+	if err := validateNativeLibraryPath(path); err != nil {
+		return nil, err
+	}
 	nativeLibraryMu.Lock()
 	defer nativeLibraryMu.Unlock()
 	cPath := C.CString(path)
@@ -1218,29 +217,29 @@ func (b *nativeBindings) close() {
 	b.ptr = nil
 }
 
-func (b *nativeBindings) fileLaneAvailable() bool {
-	return b != nil && b.ptr != nil && C.coakka_v2_go_file_lane_available(b.ptr) != 0
-}
-
-func (b *nativeBindings) loadFileOwnerGrants() error {
-	if err := requireLaneOwnerGrants(b); err != nil {
+func (b *nativeBindings) requireCoreFeature(feature uint32, name string) error {
+	if b == nil || b.ptr == nil {
+		return &CoreContractError{Operation: "runtime_get_info", Detail: "binding is closed"}
+	}
+	var supported C.uint32_t
+	if err := requireStatus(C.coakka_v2_go_query_feature(b.ptr, C.uint32_t(feature), &supported), "runtime_get_info"); err != nil {
 		return err
 	}
-	var cError *C.char
-	status := C.coakka_v2_go_load_file_owner_grants(b.ptr, &cError)
-	if cError != nil {
-		defer C.free(unsafe.Pointer(cError))
+	if supported == 0 {
+		return &FeatureUnavailableError{Feature: name}
 	}
-	if status != 0 {
-		if cError != nil {
-			return fmt.Errorf("load file owner-grant ABI: %s", C.GoString(cError))
-		}
-		return fmt.Errorf("load file owner-grant ABI")
+	if supported != 1 {
+		return &CoreContractError{Operation: "runtime_get_info", Detail: "invalid feature boolean"}
 	}
 	return nil
 }
 
+func (b *nativeBindings) loadFileOwnerGrants() error { return requireLaneOwnerGrants(b) }
+
 func (b *nativeBindings) createFileLane(config FileLaneConfig) (nativeFileLane, error) {
+	if err := config.validateRepresentation(); err != nil {
+		return nil, err
+	}
 	bindHost := C.CString(config.BindHost)
 	defer C.free(unsafe.Pointer(bindHost))
 	var security *C.coakka_v2_file_lane_security_config_t
@@ -1274,10 +273,19 @@ func (b *nativeBindings) createFileLane(config FileLaneConfig) (nativeFileLane, 
 	if err := requireStatus(C.coakka_v2_go_file_lane_create_ex(b.ptr, &native, &lane), "file_lane_create"); err != nil {
 		return nil, err
 	}
+	if lane == nil {
+		return nil, &CoreContractError{Operation: "file_lane_create", Detail: "success without owner"}
+	}
 	return nativeFileLane(unsafe.Pointer(lane)), nil
 }
 
 func (b *nativeBindings) createOwnedFileLane(config FileLaneConfig, owner LaneOwnerConfig) (nativeFileLane, error) {
+	if err := config.validateRepresentation(); err != nil {
+		return nil, err
+	}
+	if err := validateNativeText([2]string{"owner.OwnerInstanceID", owner.OwnerInstanceID}, [2]string{"owner.AdvertisedHost", owner.AdvertisedHost}); err != nil {
+		return nil, err
+	}
 	bindHost, ownerID, advertisedHost := C.CString(config.BindHost), C.CString(owner.OwnerInstanceID), C.CString(owner.AdvertisedHost)
 	defer C.free(unsafe.Pointer(bindHost))
 	defer C.free(unsafe.Pointer(ownerID))
@@ -1314,6 +322,9 @@ func (b *nativeBindings) createOwnedFileLane(config FileLaneConfig, owner LaneOw
 	if err := requireStatus(C.coakka_v2_go_file_lane_create_owned_ex(b.ptr, &owned, &lane), "file_lane_create_owned"); err != nil {
 		return nil, err
 	}
+	if lane == nil {
+		return nil, &CoreContractError{Operation: "file_lane_create", Detail: "success without owner"}
+	}
 	return nativeFileLane(unsafe.Pointer(lane)), nil
 }
 
@@ -1333,10 +344,17 @@ func (b *nativeBindings) fileLaneBoundPort(lane nativeFileLane) (uint16, error) 
 }
 
 func copyFileDigest(out *[32]C.uint8_t, digest [32]byte) {
-	C.memcpy(unsafe.Pointer(&out[0]), unsafe.Pointer(&digest[0]), 32)
+	// Fixed-width language-boundary copy; no foreign call or interior-field
+	// pointer needs to cross cgo just to populate the caller-owned C record.
+	for index, value := range digest {
+		out[index] = C.uint8_t(value)
+	}
 }
 
 func (b *nativeBindings) prepareFileReceive(lane nativeFileLane, spec FileReceiveSpec) error {
+	if err := validateNativeText([2]string{"spec.TransferID", spec.TransferID}, [2]string{"spec.AuthorizationToken", spec.AuthorizationToken}, [2]string{"spec.DestinationPath", spec.DestinationPath}); err != nil {
+		return err
+	}
 	id, token, path := C.CString(spec.TransferID), C.CString(spec.AuthorizationToken), C.CString(spec.DestinationPath)
 	defer C.free(unsafe.Pointer(id))
 	defer C.free(unsafe.Pointer(token))
@@ -1347,6 +365,9 @@ func (b *nativeBindings) prepareFileReceive(lane nativeFileLane, spec FileReceiv
 }
 
 func (b *nativeBindings) prepareFileReceiveGrant(lane nativeFileLane, spec FileReceiveSpec) (FileReceiveGrant, error) {
+	if err := validateNativeText([2]string{"spec.TransferID", spec.TransferID}, [2]string{"spec.AuthorizationToken", spec.AuthorizationToken}, [2]string{"spec.DestinationPath", spec.DestinationPath}); err != nil {
+		return FileReceiveGrant{}, err
+	}
 	id, token, path := C.CString(spec.TransferID), C.CString(spec.AuthorizationToken), C.CString(spec.DestinationPath)
 	defer C.free(unsafe.Pointer(id))
 	defer C.free(unsafe.Pointer(token))
@@ -1366,6 +387,9 @@ func (b *nativeBindings) prepareFileReceiveGrant(lane nativeFileLane, spec FileR
 }
 
 func (b *nativeBindings) submitFileSend(lane nativeFileLane, spec FileSendSpec) error {
+	if err := validateNativeText([2]string{"spec.TransferID", spec.TransferID}, [2]string{"spec.AuthorizationToken", spec.AuthorizationToken}, [2]string{"spec.RemoteHost", spec.RemoteHost}, [2]string{"spec.SourcePath", spec.SourcePath}); err != nil {
+		return err
+	}
 	id, token, host, path := C.CString(spec.TransferID), C.CString(spec.AuthorizationToken), C.CString(spec.RemoteHost), C.CString(spec.SourcePath)
 	defer C.free(unsafe.Pointer(id))
 	defer C.free(unsafe.Pointer(token))
@@ -1377,6 +401,9 @@ func (b *nativeBindings) submitFileSend(lane nativeFileLane, spec FileSendSpec) 
 }
 
 func (b *nativeBindings) fileTransfer(lane nativeFileLane, transferID string, direction FileTransferDirection, sequence uint64, timeoutMillis uint32, wait bool) (FileTransferSnapshot, error) {
+	if err := validateNativeText([2]string{"transferID", transferID}); err != nil {
+		return FileTransferSnapshot{}, err
+	}
 	id := C.CString(transferID)
 	defer C.free(unsafe.Pointer(id))
 	native := C.coakka_v2_file_transfer_snapshot_t{struct_size: C.size_t(C.sizeof_coakka_v2_file_transfer_snapshot_t)}
@@ -1393,6 +420,9 @@ func (b *nativeBindings) fileTransfer(lane nativeFileLane, transferID string, di
 }
 
 func (b *nativeBindings) cancelFileTransfer(lane nativeFileLane, transferID string, direction FileTransferDirection, forget bool) error {
+	if err := validateNativeText([2]string{"transferID", transferID}); err != nil {
+		return err
+	}
 	id := C.CString(transferID)
 	defer C.free(unsafe.Pointer(id))
 	var status C.int
@@ -1411,6 +441,9 @@ func (b *nativeBindings) fileLaneStats(lane nativeFileLane) (FileLaneStats, erro
 	return FileLaneStats{uint64(native.queue_capacity), uint64(native.queued_sends), uint64(native.prepared_receives), uint64(native.active_sends), uint64(native.active_receives), uint64(native.retained_records), uint64(native.submitted_sends), uint64(native.prepared_receive_count), uint64(native.completed_sends), uint64(native.completed_receives), uint64(native.failed_sends), uint64(native.failed_receives), uint64(native.canceled_transfers), uint64(native.completed_send_bytes), uint64(native.completed_receive_bytes)}, nil
 }
 func (b *nativeBindings) fileSHA256(path string) (FileDigest, error) {
+	if err := validateNativeText([2]string{"path", path}); err != nil {
+		return FileDigest{}, err
+	}
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var digest [32]C.uint8_t
@@ -1439,8 +472,8 @@ func (b *nativeBindings) readRuntimeInfo() (RuntimeInfoSnapshot, error) {
 		FeatureFlags:      uint32(info.feature_flags),
 		RuntimeVersion:    cString(info.runtime_version),
 		GitCommit:         cString(info.git_commit),
-		SouthboundBackend: cString(info.southbound_backend),
-		AllocatorBackend:  cString(info.allocator_backend),
+		TransportProvider: cString(info.southbound_backend),
+		AllocatorProvider: cString(info.allocator_backend),
 		DocsHint:          cString(info.docs_hint),
 	}, nil
 }
@@ -1466,6 +499,9 @@ func (b *nativeBindings) readRuntimeCapabilities() (RuntimeCapabilitiesSnapshot,
 }
 
 func (b *nativeBindings) createRuntime(config ConnectorConfig) (nativeRuntime, error) {
+	if err := validateNativeText([2]string{"config.SystemName", config.SystemName}, [2]string{"config.NodeID", config.NodeID}); err != nil {
+		return nil, err
+	}
 	systemName := C.CString(config.SystemName)
 	nodeID := C.CString(config.NodeID)
 	defer C.free(unsafe.Pointer(systemName))
@@ -1476,9 +512,47 @@ func (b *nativeBindings) createRuntime(config ConnectorConfig) (nativeRuntime, e
 		strict_no_drop: boolToCInt(config.StrictNoDrop),
 		queue_capacity: C.int(config.QueueCapacity),
 	}
-	runtime := C.coakka_v2_go_create_runtime(b.ptr, &cfg)
+	var connection *C.coakka_v2_tcp_connection_options_t
+	if config.ConnectionStrategy != nil {
+		value := C.coakka_v2_tcp_connection_options_t{
+			struct_size: C.size_t(C.sizeof_coakka_v2_tcp_connection_options_t),
+			fields:      C.uint64_t(transportConnectionFieldMode),
+			mode:        C.uint32_t(config.ConnectionStrategy.Mode),
+		}
+		if config.ConnectionStrategy.MaxConnections != nil {
+			value.fields |= C.uint64_t(transportConnectionFieldMaxConnection)
+			value.max_connections = C.uint32_t(*config.ConnectionStrategy.MaxConnections)
+		}
+		if config.ConnectionStrategy.MaxRequestsPerConnection != nil {
+			value.fields |= C.uint64_t(transportConnectionFieldMaxRequests)
+			value.max_requests_per_connection = C.uint64_t(*config.ConnectionStrategy.MaxRequestsPerConnection)
+		}
+		if config.ConnectionStrategy.IdleTimeoutMillis != nil {
+			value.fields |= C.uint64_t(transportConnectionFieldIdleTimeout)
+			value.idle_timeout_ms = C.uint64_t(*config.ConnectionStrategy.IdleTimeoutMillis)
+		}
+		connection = &value
+	}
+	var runtime *C.coakka_v2_runtime_t
+	var monitor *C.coakka_v2_startup_monitor_options_t
+	if config.Monitor != nil {
+		monitor = &C.coakka_v2_startup_monitor_options_t{
+			struct_size: C.size_t(C.sizeof_coakka_v2_startup_monitor_options_t),
+			enabled:     C.uint32_t(boolToUint32(config.Monitor.Enabled)),
+		}
+	}
+	status := C.coakka_v2_go_create_runtime_native(
+		b.ptr,
+		&cfg,
+		connection,
+		monitor,
+		&runtime,
+	)
+	if int(status) != COAKKAOK {
+		return nil, nativeStatusError("runtime_create_native", int(status))
+	}
 	if runtime == nil {
-		return nil, fmt.Errorf("coakka_v2_runtime_create returned null")
+		return nil, &CoreContractError{Operation: "runtime_create_native", Detail: "success without owner"}
 	}
 	return nativeRuntime(runtime), nil
 }
@@ -1490,6 +564,13 @@ func (b *nativeBindings) destroyRuntime(runtime nativeRuntime) {
 }
 
 func (b *nativeBindings) applyNetworkOptions(runtime nativeRuntime, network RuntimeNetworkConfig) error {
+	// The absent group goes untouched to the native constructor's default.
+	if network == (RuntimeNetworkConfig{}) {
+		return nil
+	}
+	if err := validateNativeText([2]string{"network.BindHost", network.BindHost}, [2]string{"network.AdvertiseHost", network.AdvertiseHost}); err != nil {
+		return err
+	}
 	var bindHost *C.char
 	var advertiseHost *C.char
 	if network.BindHost != "" {
@@ -1500,9 +581,21 @@ func (b *nativeBindings) applyNetworkOptions(runtime nativeRuntime, network Runt
 		advertiseHost = C.CString(network.AdvertiseHost)
 		defer C.free(unsafe.Pointer(advertiseHost))
 	}
-	fields := uint64(0x01)
+	fields := uint64(C.COAKKA_V2_NETWORK_FIELD_MODE)
 	if network.Mode == RuntimeNetworkNode {
-		fields = 0x1f
+		fields = uint64(C.COAKKA_V2_NETWORK_ALL_FIELDS)
+	}
+	if network.BindHost != "" {
+		fields |= uint64(C.COAKKA_V2_NETWORK_FIELD_BIND_HOST)
+	}
+	if network.BindPort != 0 {
+		fields |= uint64(C.COAKKA_V2_NETWORK_FIELD_BIND_PORT)
+	}
+	if network.AdvertiseHost != "" {
+		fields |= uint64(C.COAKKA_V2_NETWORK_FIELD_ADVERTISE_HOST)
+	}
+	if network.AdvertisePort != 0 {
+		fields |= uint64(C.COAKKA_V2_NETWORK_FIELD_ADVERTISE_PORT)
 	}
 	options := C.coakka_v2_network_options_t{
 		struct_size:    C.size_t(C.sizeof_coakka_v2_network_options_t),
@@ -1536,6 +629,299 @@ func (b *nativeBindings) getHostHandles(runtime nativeRuntime, flags uint32) (Ho
 		MonitorReadFD:          int(handles.monitor_read_fd),
 		DeliveredRequestReadFD: int(handles.delivered_request_read_fd),
 	}, nil
+}
+
+func nativeHostHandles(handles HostHandlesSnapshot) C.coakka_v2_host_handles_t {
+	return C.coakka_v2_host_handles_t{
+		struct_size:               C.size_t(C.sizeof_coakka_v2_host_handles_t),
+		flags:                     C.uint32_t(handles.Flags),
+		request_write_fd:          C.int(handles.RequestWriteFD),
+		response_read_fd:          C.int(handles.ResponseReadFD),
+		deadletter_read_fd:        C.int(handles.DeadletterReadFD),
+		control_write_fd:          C.int(handles.ControlWriteFD),
+		monitor_read_fd:           C.int(handles.MonitorReadFD),
+		delivered_request_read_fd: C.int(handles.DeliveredRequestReadFD),
+	}
+}
+
+func (b *nativeBindings) closeHostHandles(handles HostHandlesSnapshot) {
+	native := nativeHostHandles(handles)
+	C.coakka_v2_go_host_handles_close(b.ptr, &native)
+}
+
+func (b *nativeBindings) createRequestReader(runtime nativeRuntime, handles HostHandlesSnapshot) (nativeRequestReader, error) {
+	nativeHandles := nativeHostHandles(handles)
+	var reader *C.coakka_v2_request_reader_t
+	status := C.coakka_v2_go_request_reader_create(
+		b.ptr,
+		(*C.coakka_v2_runtime_t)(runtime),
+		&nativeHandles,
+		&reader,
+	)
+	if int(status) != COAKKAOK {
+		return nil, nativeStatusError("request_reader_create", int(status))
+	}
+	if reader == nil {
+		return nil, &CoreContractError{Operation: "request_reader_create", Detail: "success without owner"}
+	}
+	return nativeRequestReader(reader), nil
+}
+
+func (b *nativeBindings) destroyRequestReader(reader nativeRequestReader) {
+	if reader != nil {
+		C.coakka_v2_go_request_reader_destroy(b.ptr, (*C.coakka_v2_request_reader_t)(reader))
+	}
+}
+
+func (b *nativeBindings) readDeliveredRequest(reader nativeRequestReader, timeoutMillis uint32, staging []byte) (nativeDeliveredRequest, int, error) {
+	if len(staging) == 0 {
+		return nativeDeliveredRequest{}, COAKKAErrInvalidArg, nativeStatusError("request_reader_staging", COAKKAErrInvalidArg)
+	}
+	result := C.coakka_v2_go_read_delivered_request_packed(
+		b.ptr,
+		(*C.coakka_v2_request_reader_t)(reader),
+		C.uint32_t(timeoutMillis),
+		bytePointer(staging),
+		C.size_t(len(staging)),
+	)
+	status := int(result.status)
+	native := result.value
+	if status == COAKKAErrWouldBlock || status == COAKKAErrClosed {
+		return nativeDeliveredRequest{}, status, nil
+	}
+	if status != COAKKAOK {
+		return nativeDeliveredRequest{}, status, nativeStatusError("request_reader_read", status)
+	}
+	if native.large_packed != nil {
+		defer C.free(unsafe.Pointer(native.large_packed))
+	}
+	frameLength := uint64(native.frame_len)
+	targetLength := uint64(native.target_len)
+	payloadLength := uint64(native.payload_len)
+	packedLength := uint64(native.packed_len)
+	if frameLength == 0 || frameLength > maxNativeProjectionBytes ||
+		targetLength == 0 || targetLength > maxNativeProjectionBytes ||
+		payloadLength > maxNativeProjectionBytes || packedLength > maxNativeProjectionBytes || native.one_way > 1 ||
+		packedLength != frameLength+targetLength+1+payloadLength {
+		return nativeDeliveredRequest{}, COAKKAErrIO, nativeStatusError("owned_frame", COAKKAErrIO)
+	}
+	var packed []byte
+	if native.large_packed != nil {
+		packed = C.GoBytes(unsafe.Pointer(native.large_packed), C.int(packedLength))
+	} else {
+		if packedLength > uint64(len(staging)) {
+			return nativeDeliveredRequest{}, COAKKAErrIO, nativeStatusError("request_reader_staging", COAKKAErrIO)
+		}
+		packed = staging[:int(packedLength)]
+	}
+	frameEnd := int(frameLength)
+	targetEnd := frameEnd + int(targetLength)
+	payloadStart := targetEnd + 1
+	if packed[targetEnd] != 0 {
+		return nativeDeliveredRequest{}, COAKKAErrIO, nativeStatusError("request_target_termination", COAKKAErrIO)
+	}
+	request := nativeDeliveredRequest{
+		OneWay: native.one_way == 1,
+	}
+	if native.large_packed != nil {
+		request.Frame = packed[:frameEnd]
+		request.Target = packed[frameEnd:targetEnd]
+		request.TargetCString = packed[frameEnd:payloadStart]
+		request.Payload = packed[payloadStart:]
+	} else {
+		owned := append([]byte(nil), packed...)
+		request.Frame = owned[:frameEnd]
+		request.Target = owned[frameEnd:targetEnd]
+		request.TargetCString = owned[frameEnd:payloadStart]
+		request.Payload = owned[payloadStart:]
+	}
+	return request, COAKKAOK, nil
+}
+
+func (b *nativeBindings) createAskClient(runtime nativeRuntime, handles HostHandlesSnapshot) (nativeAskClient, error) {
+	nativeHandles := nativeHostHandles(handles)
+	var client *C.coakka_v2_ask_client_t
+	status := int(C.coakka_v2_go_ask_client_create_ex(
+		b.ptr,
+		(*C.coakka_v2_runtime_t)(runtime),
+		&nativeHandles,
+		&client,
+	))
+	return adoptAskClient(status, nativeAskClient(client))
+}
+
+// Cold language ownership projection only. Core owns every causal refusal and
+// partial-start rollback; a failed result never transfers a client to Go.
+func adoptAskClient(status int, client nativeAskClient) (nativeAskClient, error) {
+	if status != COAKKAOK {
+		return nil, nativeStatusError("ask_client_create_ex", status)
+	}
+	if client == nil {
+		return nil, &CoreContractError{Operation: "ask_client_create_ex", Detail: "success without owner"}
+	}
+	return client, nil
+}
+
+func (b *nativeBindings) destroyAskClient(client nativeAskClient) {
+	if client != nil {
+		C.coakka_v2_go_ask_client_destroy(b.ptr, (*C.coakka_v2_ask_client_t)(client))
+	}
+}
+
+func (b *nativeBindings) beginAsk(client nativeAskClient, frame []byte) (nativeAskTicket, error) {
+	var ticket *C.coakka_v2_ask_ticket_t
+	status := int(C.coakka_v2_go_ask_client_begin(
+		b.ptr,
+		(*C.coakka_v2_ask_client_t)(client),
+		bytePointer(frame),
+		C.size_t(len(frame)),
+		&ticket,
+	))
+	if status != COAKKAOK {
+		return nil, nativeStatusError("ask_client_begin", status)
+	}
+	if ticket == nil {
+		return nil, &CoreContractError{Operation: "ask_client_begin", Detail: "success without owner"}
+	}
+	return nativeAskTicket(ticket), nil
+}
+
+func (b *nativeBindings) askPayload(
+	client nativeAskClient,
+	messageID nativeCString,
+	source nativeCString,
+	target nativeCString,
+	replyTo nativeCString,
+	payload []byte,
+	requestTimeoutMillis uint32,
+	waitTimeoutMillis uint32,
+	deliveryHint DeliveryHint,
+) (int, []byte, int, error) {
+	if !validNativeCString(messageID) || !validNativeCString(source) ||
+		!validNativeCString(target) || !validNativeCString(replyTo) {
+		return 0, nil, COAKKAErrInvalidArg, fmt.Errorf("ask text must be NUL terminated")
+	}
+	result := C.coakka_v2_go_ask_payload(
+		b.ptr,
+		(*C.coakka_v2_ask_client_t)(client),
+		(*C.char)(unsafe.Pointer(unsafe.SliceData(messageID))),
+		(*C.char)(unsafe.Pointer(unsafe.SliceData(source))),
+		(*C.char)(unsafe.Pointer(unsafe.SliceData(target))),
+		(*C.char)(unsafe.Pointer(unsafe.SliceData(replyTo))),
+		bytePointer(payload),
+		C.size_t(len(payload)),
+		C.uint32_t(requestTimeoutMillis),
+		C.uint32_t(waitTimeoutMillis),
+		C.uint32_t(deliveryHint),
+	)
+	status := int(result.status)
+	kind := result.kind
+	bytes := result.value.owner
+	if bytes != nil {
+		defer C.coakka_v2_go_client_bytes_release(b.ptr, bytes)
+	}
+	if status == COAKKAErrWouldBlock || status == COAKKAErrClosed {
+		return int(kind), nil, status, nil
+	}
+	length := uint64(result.value.size)
+	if status != COAKKAOK {
+		return int(kind), nil, status, nativeStatusError("ask_payload", status)
+	}
+	if length > maxNativeProjectionBytes || result.value.inline_owned > 1 ||
+		(result.value.inline_owned == 0 && length != 0 && bytes == nil) ||
+		(result.value.inline_owned == 1 && (length > C.COAKKA_GO_INLINE_PAYLOAD_BYTES || bytes != nil)) ||
+		(kind != nativeClientResultResponse && kind != nativeClientResultDeadletter) {
+		return int(kind), nil, COAKKAErrIO, nativeStatusError("ask_payload_result", COAKKAErrIO)
+	}
+	if length == 0 {
+		return int(kind), nil, COAKKAOK, nil
+	}
+	if result.value.inline_owned == 1 {
+		// The receipt owns this fixed span in Go memory. Copy before returning;
+		// neither its address nor a borrowed slice escapes the language boundary.
+		owned := make([]byte, int(length))
+		copy(owned, unsafe.Slice((*byte)(unsafe.Pointer(&result.value.inline_bytes[0])), int(length)))
+		return int(kind), owned, COAKKAOK, nil
+	}
+	return int(kind), C.GoBytes(unsafe.Pointer(bytes), C.int(length)), COAKKAOK, nil
+}
+
+func validNativeCString(value nativeCString) bool {
+	return len(value) >= 2 && value[len(value)-1] == 0
+}
+
+func (b *nativeBindings) awaitAsk(ticket nativeAskTicket, timeoutMillis uint32) (int, []byte, int, error) {
+	var kind C.uint32_t
+	var frame *C.uint8_t
+	var frameLength C.size_t
+	status := int(C.coakka_v2_go_ask_ticket_await(
+		b.ptr,
+		(*C.coakka_v2_ask_ticket_t)(ticket),
+		C.uint32_t(timeoutMillis),
+		&kind,
+		&frame,
+		&frameLength,
+	))
+	if frame != nil {
+		defer C.coakka_v2_go_client_bytes_release(b.ptr, frame)
+	}
+	if status == COAKKAErrWouldBlock || status == COAKKAErrClosed {
+		return int(kind), nil, status, nil
+	}
+	length := uint64(frameLength)
+	if status != COAKKAOK {
+		return int(kind), nil, status, nativeStatusError("ask_ticket_await", status)
+	}
+	if frame == nil || length == 0 || length > maxNativeProjectionBytes ||
+		(kind != nativeClientResultResponse && kind != nativeClientResultDeadletter) {
+		return int(kind), nil, COAKKAErrIO, nativeStatusError("ask_result", COAKKAErrIO)
+	}
+	return int(kind), C.GoBytes(unsafe.Pointer(frame), C.int(length)), COAKKAOK, nil
+}
+
+func (b *nativeBindings) cancelAsk(ticket nativeAskTicket) {
+	if ticket != nil {
+		C.coakka_v2_go_ask_ticket_cancel(b.ptr, (*C.coakka_v2_ask_ticket_t)(ticket))
+	}
+}
+
+func (b *nativeBindings) destroyAskTicket(ticket nativeAskTicket) {
+	if ticket != nil {
+		C.coakka_v2_go_ask_ticket_destroy(b.ptr, (*C.coakka_v2_ask_ticket_t)(ticket))
+	}
+}
+
+func (b *nativeBindings) submitRawReply(runtime nativeRuntime, requestFrame []byte, source string, payload []byte) error {
+	if err := validateNativeText([2]string{"source", source}); err != nil {
+		return err
+	}
+	sourceBytes := make([]byte, len(source)+1)
+	copy(sourceBytes, source)
+	return b.submitRawReplyCString(runtime, requestFrame, sourceBytes, payload)
+}
+
+func (b *nativeBindings) submitRawReplyCString(runtime nativeRuntime, requestFrame []byte, sourceCString []byte, payload []byte) error {
+	if len(sourceCString) < 2 || sourceCString[len(sourceCString)-1] != 0 {
+		return nativeStatusError("submit_raw_reply_source", COAKKAErrInvalidArg)
+	}
+	for _, value := range sourceCString[:len(sourceCString)-1] {
+		if value == 0 {
+			return nativeStatusError("submit_raw_reply_source", COAKKAErrInvalidArg)
+		}
+	}
+	status := int(C.coakka_v2_go_submit_raw_reply(
+		b.ptr,
+		(*C.coakka_v2_runtime_t)(runtime),
+		bytePointer(requestFrame),
+		C.size_t(len(requestFrame)),
+		(*C.char)(unsafe.Pointer(unsafe.SliceData(sourceCString))),
+		bytePointer(payload),
+		C.size_t(len(payload)),
+	))
+	if status != COAKKAOK {
+		return nativeStatusError("submit_raw_reply", status)
+	}
+	return nil
 }
 
 func (b *nativeBindings) startRuntime(runtime nativeRuntime) error {
@@ -1611,12 +997,50 @@ func (b *nativeBindings) getConfig(runtime nativeRuntime) (RuntimeConfigSnapshot
 		SnapshotPresent:                          config.snapshot_present != 0,
 		AppliedGeneration:                        uint64(config.applied_generation),
 		RouteCount:                               uint64(config.route_count),
-		SouthboundBindHost:                       cString(config.southbound_bind_host),
-		SouthboundBindPort:                       uint16(config.southbound_bind_port),
+		TransportBindHost:                        cString(config.southbound_bind_host),
+		TransportBindPort:                        uint16(config.southbound_bind_port),
 		EffectiveIngressOverloadMode:             uint32(config.effective_ingress_overload_mode),
 		EffectiveLocalDeliveryOverloadMode:       uint32(config.effective_local_delivery_overload_mode),
 		EffectiveRemoteOutboundOverloadMode:      uint32(config.effective_remote_outbound_overload_mode),
 		EffectiveRemoteOutboundReplyReserveSlots: uint64(config.effective_remote_outbound_reply_reserve_slots),
+	}, nil
+}
+
+func (b *nativeBindings) getStartupConfig(runtime nativeRuntime) (RuntimeStartupConfigSnapshot, error) {
+	native := C.coakka_v2_runtime_startup_config_t{
+		struct_size: C.size_t(C.sizeof_coakka_v2_runtime_startup_config_t),
+	}
+	if err := requireStatus(
+		C.coakka_v2_go_get_startup_config(b.ptr, (*C.coakka_v2_runtime_t)(runtime), &native),
+		"runtime_get_startup_config",
+	); err != nil {
+		return RuntimeStartupConfigSnapshot{}, err
+	}
+	return RuntimeStartupConfigSnapshot{
+		DefaultsRevision:    uint32(native.defaults_revision),
+		DefaultedGroups:     uint32(native.defaulted_groups),
+		StrictNoDrop:        native.strict_no_drop != 0,
+		QueueCapacity:       uint32(native.queue_capacity),
+		RequestMaxFrameSize: uint64(native.request_max_frame_size),
+		RuntimeState:        uint32(native.runtime_state),
+		Execution: RuntimeStartupCPUInfo{
+			RequestedPolicy:   uint32(native.execution.requested_policy),
+			Supported:         native.execution.supported != 0,
+			AvailableCPUCount: uint32(native.execution.available_cpu_count),
+			SelectedCPUCount:  uint32(native.execution.selected_cpu_count),
+			SelectedCPUIds:    [2]uint32{uint32(native.execution.selected_cpu_ids[0]), uint32(native.execution.selected_cpu_ids[1])},
+			StartupApplied:    native.execution.startup_applied != 0,
+		},
+		Connection: connectionConfigSnapshot(native.connection),
+		IO: RuntimeStartupIOInfo{
+			Requested:  native.io.requested != 0,
+			Compiled:   native.io.compiled != 0,
+			Probed:     native.io.probed != 0,
+			Supported:  native.io.supported != 0,
+			Effective:  native.io.effective != 0,
+			ProbeError: int32(native.io.probe_error),
+		},
+		Monitor: RuntimeStartupMonitorInfo{Enabled: native.monitor.enabled != 0},
 	}, nil
 }
 
@@ -1865,19 +1289,32 @@ func (b *nativeBindings) applyControlEnvelope(runtime nativeRuntime, bytes []byt
 	return requireStatus(C.coakka_v2_go_apply_control_envelope(b.ptr, (*C.coakka_v2_runtime_t)(runtime), bytePointer(bytes), C.size_t(len(bytes))), "runtime_apply_control_envelope")
 }
 
-func (b *nativeBindings) monitorConsume(fd int) (uint64, error) {
+func (b *nativeBindings) monitorWaitConsume(fd int, timeoutMillis uint32) (uint64, int, error) {
 	var signalCount C.uint64_t
-	if err := requireStatus(C.coakka_v2_go_monitor_consume(b.ptr, C.int(fd), &signalCount), "monitor_consume"); err != nil {
-		return 0, err
+	status := int(C.coakka_v2_go_monitor_wait_consume(
+		b.ptr,
+		C.int(fd),
+		C.uint32_t(timeoutMillis),
+		&signalCount,
+	))
+	if status == COAKKAErrWouldBlock || status == COAKKAErrClosed {
+		return 0, status, nil
 	}
-	return uint64(signalCount), nil
+	if status != COAKKAOK {
+		return 0, status, nativeStatusError("monitor_wait_consume", status)
+	}
+	return uint64(signalCount), COAKKAOK, nil
+}
+
+func nativeStatusError(operation string, status int) error {
+	return &CoreStatusError{Operation: operation, Status: status}
 }
 
 func requireStatus(status C.int, operation string) error {
 	if int(status) == COAKKAOK {
 		return nil
 	}
-	return fmt.Errorf("%s failed status=%d", operation, int(status))
+	return nativeStatusError(operation, int(status))
 }
 
 func cString(ptr *C.char) string {
@@ -1894,63 +1331,16 @@ func boolToCInt(value bool) C.int {
 	return 0
 }
 
+func boolToUint32(value bool) uint32 {
+	if value {
+		return 1
+	}
+	return 0
+}
+
 func bytePointer(bytes []byte) *C.uint8_t {
 	if len(bytes) == 0 {
 		return nil
 	}
 	return (*C.uint8_t)(unsafe.Pointer(unsafe.SliceData(bytes)))
-}
-
-type nativeFDError struct {
-	operation string
-	code      int
-}
-
-func (e *nativeFDError) Error() string {
-	return fmt.Sprintf("%s failed errno=%d", e.operation, e.code)
-}
-
-func waitReadable(fd int, timeout time.Duration) (bool, error) {
-	timeoutMillis := int64(timeout / time.Millisecond)
-	if timeout < 0 {
-		timeoutMillis = -1
-	} else if timeoutMillis > 1<<31-1 {
-		timeoutMillis = 1<<31 - 1
-	}
-	var ready C.int
-	code := C.coakka_v2_go_wait_readable(C.int(fd), C.int(timeoutMillis), &ready)
-	if code != 0 {
-		return false, &nativeFDError{operation: "wait readable", code: int(code)}
-	}
-	return ready != 0, nil
-}
-
-func nativeReadFD(fd int, buffer []byte) (int, error) {
-	var readCount C.size_t
-	code := C.coakka_v2_go_read_fd(
-		C.int(fd),
-		bytePointer(buffer),
-		C.size_t(len(buffer)),
-		&readCount,
-	)
-	if code != 0 {
-		return 0, &nativeFDError{operation: "read", code: int(code)}
-	}
-	return int(readCount), nil
-}
-
-func isRetryableReadError(err error) bool {
-	fdError, ok := err.(*nativeFDError)
-	return ok && C.coakka_v2_go_fd_error_retryable(C.int(fdError.code)) != 0
-}
-
-func isTerminalReadError(err error) bool {
-	fdError, ok := err.(*nativeFDError)
-	return ok && C.coakka_v2_go_fd_error_terminal(C.int(fdError.code)) != 0
-}
-
-func safeCloseFD(fd int) {
-	if fd >= 0 {
-		C.coakka_v2_go_close_fd(C.int(fd))
-	}
 }

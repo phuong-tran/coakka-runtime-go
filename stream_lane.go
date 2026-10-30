@@ -1,165 +1,8 @@
 package coakka_v2_connector
 
 /*
-#include <stddef.h>
-#include <stdint.h>
+#include "runtime_bridge.h"
 #include <stdlib.h>
-
-typedef struct coakka_v2_stream_lane_t coakka_v2_stream_lane_t;
-typedef struct coakka_v2_go_bindings_t coakka_v2_go_bindings_t;
-
-typedef struct {
-  size_t struct_size;
-  uint64_t sequence;
-  uint64_t captured_mono_ns;
-  uint64_t dropped_before;
-  uint32_t flags;
-  size_t size;
-} coakka_v2_stream_frame_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t mode;
-  uint32_t reserved;
-  uint64_t credential_generation;
-  const char *credential_id;
-  const char *ca_certificate_file;
-  const char *identity_certificate_file;
-  const char *private_key_file;
-} coakka_v2_stream_lane_security_config_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t flags;
-  const char *bind_host;
-  uint16_t bind_port;
-  size_t capacity;
-  uint32_t max_frame_bytes;
-  uint32_t max_window_bytes;
-  uint32_t io_timeout_ms;
-  uint32_t source_retry_ms;
-  uint32_t progress_frames;
-  uint32_t progress_interval_ms;
-  uint32_t publisher_worker_count;
-  uint32_t subscriber_worker_count;
-  const coakka_v2_stream_lane_security_config_t *security;
-  uint32_t pressure_after_ms;
-  uint32_t stalled_after_ms;
-  uint32_t recovery_after_ms;
-  uint32_t pressure_observation_ms;
-} coakka_v2_stream_lane_config_t;
-
-typedef struct {
-  size_t struct_size;
-  const char *owner_instance_id;
-  const char *advertised_host;
-} coakka_v2_lane_owner_config_t;
-
-typedef struct {
-  size_t struct_size;
-  uint16_t port;
-  uint16_t reserved;
-  char owner_instance_id[128];
-  char advertised_host[256];
-} coakka_v2_lane_owner_endpoint_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_stream_lane_config_t lane;
-  coakka_v2_lane_owner_config_t owner;
-} coakka_v2_stream_lane_owned_config_t;
-
-typedef struct {
-  size_t struct_size;
-  coakka_v2_lane_owner_endpoint_t owner;
-  char session_id[65];
-  char authorization_token[129];
-  uint64_t format_id;
-  uint32_t max_frame_bytes;
-  uint32_t reserved;
-} coakka_v2_stream_publish_grant_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t direction;
-  uint32_t state;
-  uint32_t result;
-  uint64_t format_id;
-  uint64_t frames;
-  uint64_t bytes;
-  uint64_t dropped_frames;
-  uint64_t last_sequence;
-  uint32_t negotiated_max_frame_bytes;
-  uint32_t window_bytes;
-  uint32_t cancel_requested;
-  uint64_t update_sequence;
-  uint64_t submitted_mono_ns;
-  uint64_t started_mono_ns;
-  uint64_t updated_mono_ns;
-  uint64_t terminal_mono_ns;
-  char detail[160];
-} coakka_v2_stream_session_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  uint32_t direction;
-  uint32_t state;
-  uint32_t reason_bits;
-  uint32_t available_credit_bytes;
-  uint32_t window_capacity_bytes;
-  uint64_t update_sequence;
-  uint64_t transition_count;
-  uint64_t observed_mono_ns;
-  uint64_t state_started_mono_ns;
-  uint64_t pressure_started_mono_ns;
-  uint64_t last_progress_mono_ns;
-  uint64_t observed_delivery_bps;
-  uint64_t current_operation_ns;
-  uint64_t last_operation_ns;
-  uint64_t total_pressured_ns;
-  uint64_t max_pressured_ns;
-} coakka_v2_stream_pressure_snapshot_t;
-
-typedef struct {
-  size_t struct_size;
-  size_t capacity;
-  size_t queued_subscribers;
-  size_t prepared_publishers;
-  size_t active_publishers;
-  size_t active_subscribers;
-  size_t retained_records;
-  uint64_t submitted_subscribers;
-  uint64_t prepared_publisher_count;
-  uint64_t ended_publishers;
-  uint64_t ended_subscribers;
-  uint64_t failed_publishers;
-  uint64_t failed_subscribers;
-  uint64_t canceled_sessions;
-  uint64_t published_frames;
-  uint64_t published_bytes;
-  uint64_t consumed_frames;
-  uint64_t consumed_bytes;
-  uint64_t source_reported_drops;
-} coakka_v2_stream_lane_stats_t;
-
-int coakka_v2_go_stream_lane_available(coakka_v2_go_bindings_t *);
-int coakka_v2_go_load_stream_owner_grants(coakka_v2_go_bindings_t *, char **);
-int coakka_v2_go_stream_lane_create_ex(coakka_v2_go_bindings_t *, const coakka_v2_stream_lane_config_t *, coakka_v2_stream_lane_t **);
-int coakka_v2_go_stream_lane_create_owned_ex(coakka_v2_go_bindings_t *, const coakka_v2_stream_lane_owned_config_t *, coakka_v2_stream_lane_t **);
-void coakka_v2_go_stream_lane_destroy(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *);
-int coakka_v2_go_stream_lane_start(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *);
-int coakka_v2_go_stream_lane_stop(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *);
-int coakka_v2_go_stream_lane_get_bound_port(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, uint16_t *);
-int coakka_v2_go_stream_lane_prepare_publish(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, const char *, uint64_t, uint32_t, uintptr_t);
-int coakka_v2_go_stream_lane_prepare_publish_grant(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, const char *, uint64_t, uint32_t, uintptr_t, coakka_v2_stream_publish_grant_t *);
-int coakka_v2_go_stream_lane_subscribe(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, const char *, const char *, uint16_t, uint64_t, uint32_t, uint32_t, uint32_t, uintptr_t);
-int coakka_v2_go_stream_lane_get_session(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_session_snapshot_t *);
-int coakka_v2_go_stream_lane_wait_session(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_session_snapshot_t *);
-int coakka_v2_go_stream_lane_get_pressure(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t, coakka_v2_stream_pressure_snapshot_t *);
-int coakka_v2_go_stream_lane_wait_pressure(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t, uint64_t, uint32_t, coakka_v2_stream_pressure_snapshot_t *);
-int coakka_v2_go_stream_lane_cancel_session(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t);
-int coakka_v2_go_stream_lane_forget_session(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, const char *, uint32_t);
-int coakka_v2_go_stream_lane_get_stats(coakka_v2_go_bindings_t *, coakka_v2_stream_lane_t *, coakka_v2_stream_lane_stats_t *);
 */
 import "C"
 
@@ -301,10 +144,12 @@ type StreamFrameMetadata struct {
 
 // StreamSource fills the borrowed destination and returns promptly.
 // The slice is valid only during the callback and must not be retained.
+// Do not call Close on the same lane from a callback (Core's join contract).
 type StreamSource func(destination []byte) StreamSourceResult
 
 // StreamConsumer consumes borrowed frame bytes and returns promptly.
 // The slice is valid only during the callback and must not be retained.
+// Do not call Close on the same lane from a callback (Core's join contract).
 type StreamConsumer func(frame []byte, metadata StreamFrameMetadata) StreamConsumerDecision
 
 // StreamLaneSecurityConfig names TLS material copied when a lane starts.
@@ -344,6 +189,17 @@ type StreamLaneConfig struct {
 // DefaultStreamLaneConfig returns a loopback lane with publisher and subscriber enabled.
 func DefaultStreamLaneConfig() StreamLaneConfig {
 	return StreamLaneConfig{Flags: StreamLanePublisher | StreamLaneSubscriber, BindHost: "127.0.0.1"}
+}
+
+func (c StreamLaneConfig) validateRepresentation() error {
+	if err := validateNativeText([2]string{"bind host", c.BindHost}); err != nil {
+		return err
+	}
+	if c.Security == nil {
+		return nil
+	}
+	s := c.Security
+	return validateNativeText([2]string{"credential ID", s.CredentialID}, [2]string{"CA path", s.CACertificateFile}, [2]string{"identity path", s.IdentityCertificateFile}, [2]string{"key path", s.PrivateKeyFile})
 }
 
 // StreamPublishSpec authorizes a publisher and provides its bounded frame source.
@@ -404,12 +260,12 @@ type StreamSessionSnapshot struct {
 	Detail                                       string
 }
 
-// Terminal reports whether this side reached a terminal state.
-func (s StreamSessionSnapshot) Terminal() bool { return s.State >= StreamEnded }
+// Terminal projects Core's actual terminal-transition marker, not state ordinals.
+func (s StreamSessionSnapshot) Terminal() bool { return s.TerminalMonoNS != 0 }
 
 // Succeeded reports whether this side ended normally.
 func (s StreamSessionSnapshot) Succeeded() bool {
-	return s.State == StreamEnded && s.Result == StreamResultOK
+	return s.Terminal() && s.State == StreamEnded && s.Result == StreamResultOK
 }
 
 // StreamPressureSnapshot is a copied, policy-neutral transport-pressure observation.
@@ -454,7 +310,10 @@ type StreamLane struct {
 	closing   bool
 	active    int
 	callbacks map[streamCallbackKey]cgo.Handle
-	owned     bool
+	// Serialize callback-owner admission/replacement/forget, not callback work.
+	// Core may accept a replacement; map adoption must follow that exact order.
+	callbackMu sync.Mutex
+	owned      bool
 }
 
 type nativeStreamLane unsafe.Pointer
@@ -522,28 +381,11 @@ func OpenStreamLane(config StreamLaneConfig, runtimeLibPath string) (*StreamLane
 
 // OpenOwnedStreamLane starts a lane that can issue replica-pinned publish grants.
 func OpenOwnedStreamLane(config StreamLaneConfig, owner LaneOwnerConfig, runtimeLibPath string) (*StreamLane, error) {
-	if err := owner.validate(); err != nil {
-		return nil, err
-	}
 	return openStreamLane(config, owner, runtimeLibPath, true)
 }
 
 func openStreamLane(config StreamLaneConfig, owner LaneOwnerConfig, runtimeLibPath string, owned bool) (*StreamLane, error) {
-	if config.Flags == 0 {
-		config.Flags = StreamLanePublisher | StreamLaneSubscriber
-	}
-	if config.BindHost == "" {
-		config.BindHost = "127.0.0.1"
-	}
-	if config.Flags&^(StreamLanePublisher|StreamLaneSubscriber) != 0 || config.Capacity > 64 ||
-		config.MaxFrameBytes > 4*1024*1024 || config.MaxWindowBytes > 16*1024*1024 ||
-		config.SourceRetryMillis > 1000 || config.PublisherWorkerCount > 4 || config.SubscriberWorkerCount > 4 ||
-		config.PressureAfterMillis > 60000 || config.StalledAfterMillis > 60000 ||
-		config.RecoveryAfterMillis > 60000 || config.PressureObservationMillis > 60000 ||
-		(config.MaxFrameBytes != 0 && config.MaxWindowBytes != 0 && config.MaxWindowBytes < config.MaxFrameBytes) {
-		return nil, errors.New("invalid stream-lane bounds, flags, or worker count")
-	}
-	path, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath, nil)
+	path, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath)
 	if err != nil {
 		return nil, err
 	}
@@ -551,9 +393,9 @@ func openStreamLane(config StreamLaneConfig, owner LaneOwnerConfig, runtimeLibPa
 	if err != nil {
 		return nil, err
 	}
-	if C.coakka_v2_go_stream_lane_available(bindings.ptr) == 0 {
+	if err := bindings.requireCoreFeature(runtimeFeatureStreamLane, "Stream Lane"); err != nil {
 		bindings.close()
-		return nil, errors.New("native runtime does not export the complete stream-lane ABI")
+		return nil, err
 	}
 	var lane nativeStreamLane
 	if owned {
@@ -580,24 +422,13 @@ func openStreamLane(config StreamLaneConfig, owner LaneOwnerConfig, runtimeLibPa
 }
 
 func (b *nativeBindings) loadStreamOwnerGrants() error {
-	if err := requireLaneOwnerGrants(b); err != nil {
-		return err
-	}
-	var cError *C.char
-	status := C.coakka_v2_go_load_stream_owner_grants(b.ptr, &cError)
-	if cError != nil {
-		defer C.free(unsafe.Pointer(cError))
-	}
-	if status != 0 {
-		if cError != nil {
-			return fmt.Errorf("load stream owner-grant ABI: %s", C.GoString(cError))
-		}
-		return errors.New("load stream owner-grant ABI")
-	}
-	return nil
+	return requireLaneOwnerGrants(b)
 }
 
 func (b *nativeBindings) createStreamLane(config StreamLaneConfig) (nativeStreamLane, error) {
+	if err := config.validateRepresentation(); err != nil {
+		return nil, err
+	}
 	bind := C.CString(config.BindHost)
 	defer C.free(unsafe.Pointer(bind))
 	var security *C.coakka_v2_stream_lane_security_config_t
@@ -633,10 +464,19 @@ func (b *nativeBindings) createStreamLane(config StreamLaneConfig) (nativeStream
 	if err := requireStatus(C.coakka_v2_go_stream_lane_create_ex(b.ptr, &native, &lane), "stream_lane_create"); err != nil {
 		return nil, err
 	}
+	if lane == nil {
+		return nil, &CoreContractError{Operation: "stream_lane_create", Detail: "success without owner"}
+	}
 	return nativeStreamLane(unsafe.Pointer(lane)), nil
 }
 
 func (b *nativeBindings) createOwnedStreamLane(config StreamLaneConfig, owner LaneOwnerConfig) (nativeStreamLane, error) {
+	if err := config.validateRepresentation(); err != nil {
+		return nil, err
+	}
+	if err := validateNativeText([2]string{"owner.OwnerInstanceID", owner.OwnerInstanceID}, [2]string{"owner.AdvertisedHost", owner.AdvertisedHost}); err != nil {
+		return nil, err
+	}
 	bind, ownerID, advertisedHost := C.CString(config.BindHost), C.CString(owner.OwnerInstanceID), C.CString(owner.AdvertisedHost)
 	defer C.free(unsafe.Pointer(bind))
 	defer C.free(unsafe.Pointer(ownerID))
@@ -675,6 +515,9 @@ func (b *nativeBindings) createOwnedStreamLane(config StreamLaneConfig, owner La
 	var lane *C.coakka_v2_stream_lane_t
 	if err := requireStatus(C.coakka_v2_go_stream_lane_create_owned_ex(b.ptr, &ownedConfig, &lane), "stream_lane_create_owned"); err != nil {
 		return nil, err
+	}
+	if lane == nil {
+		return nil, &CoreContractError{Operation: "stream_lane_create", Detail: "success without owner"}
 	}
 	return nativeStreamLane(unsafe.Pointer(lane)), nil
 }
@@ -726,6 +569,8 @@ func (l *StreamLane) PreparePublishGrant(spec StreamPublishSpec) (StreamPublishG
 }
 
 func (l *StreamLane) preparePublish(spec StreamPublishSpec, grantRequested bool) (StreamPublishGrant, error) {
+	l.callbackMu.Lock()
+	defer l.callbackMu.Unlock()
 	if err := validateStreamSpec(spec.SessionID, spec.AuthorizationToken, spec.MaxFrameBytes); err != nil {
 		return StreamPublishGrant{}, err
 	}
@@ -753,7 +598,12 @@ func (l *StreamLane) preparePublish(spec StreamPublishSpec, grantRequested bool)
 		return StreamPublishGrant{}, err
 	}
 	l.mu.Lock()
-	l.callbacks[streamCallbackKey{spec.SessionID, StreamPublish}] = handle
+	key := streamCallbackKey{spec.SessionID, StreamPublish}
+	if previous, ok := l.callbacks[key]; ok {
+		// Core accepted replacement only after the old publisher is inactive.
+		previous.Delete()
+	}
+	l.callbacks[key] = handle
 	l.mu.Unlock()
 	if !grantRequested {
 		return StreamPublishGrant{}, nil
@@ -766,11 +616,13 @@ func (l *StreamLane) preparePublish(spec StreamPublishSpec, grantRequested bool)
 
 // Subscribe queues a subscriber and roots consumer until Forget or Close.
 func (l *StreamLane) Subscribe(spec StreamSubscribeSpec) error {
+	l.callbackMu.Lock()
+	defer l.callbackMu.Unlock()
 	if err := validateStreamSpec(spec.SessionID, spec.AuthorizationToken, spec.MaxFrameBytes); err != nil {
 		return err
 	}
-	if spec.RemoteHost == "" || spec.RemotePort == 0 {
-		return errors.New("remote host and port are required")
+	if err := validateNativeText([2]string{"remote host", spec.RemoteHost}); err != nil {
+		return err
 	}
 	if spec.Consumer == nil {
 		return errors.New("stream consumer is required")
@@ -791,19 +643,17 @@ func (l *StreamLane) Subscribe(spec StreamSubscribeSpec) error {
 		return err
 	}
 	l.mu.Lock()
-	l.callbacks[streamCallbackKey{spec.SessionID, StreamSubscribe}] = handle
+	key := streamCallbackKey{spec.SessionID, StreamSubscribe}
+	if previous, ok := l.callbacks[key]; ok {
+		previous.Delete()
+	}
+	l.callbacks[key] = handle
 	l.mu.Unlock()
 	return nil
 }
 
 func validateStreamSpec(sessionID, token string, maxFrame uint32) error {
-	if sessionID == "" || len(sessionID) > 64 || token == "" || len(token) > 128 {
-		return errors.New("session ID or authorization token is empty or exceeds its byte limit")
-	}
-	if maxFrame == 0 || maxFrame > 4*1024*1024 {
-		return errors.New("max frame bytes must be in [1, 4194304]")
-	}
-	return nil
+	return validateNativeText([2]string{"session ID", sessionID}, [2]string{"authorization token", token})
 }
 
 // Session returns the current copied session snapshot without waiting.
@@ -817,6 +667,9 @@ func (l *StreamLane) WaitSession(sessionID string, direction StreamDirection, af
 }
 
 func (l *StreamLane) session(sessionID string, direction StreamDirection, sequence uint64, timeout uint32, wait bool) (StreamSessionSnapshot, error) {
+	if err := validateNativeText([2]string{"sessionID", sessionID}); err != nil {
+		return StreamSessionSnapshot{}, err
+	}
 	lane, err := l.acquire()
 	if err != nil {
 		return StreamSessionSnapshot{}, err
@@ -848,6 +701,9 @@ func (l *StreamLane) WaitPressure(sessionID string, direction StreamDirection, a
 }
 
 func (l *StreamLane) pressure(sessionID string, direction StreamDirection, sequence uint64, timeout uint32, wait bool) (StreamPressureSnapshot, error) {
+	if err := validateNativeText([2]string{"sessionID", sessionID}); err != nil {
+		return StreamPressureSnapshot{}, err
+	}
 	lane, err := l.acquire()
 	if err != nil {
 		return StreamPressureSnapshot{}, err
@@ -879,6 +735,11 @@ func (l *StreamLane) Forget(sessionID string, direction StreamDirection) error {
 }
 
 func (l *StreamLane) control(sessionID string, direction StreamDirection, forget bool) error {
+	l.callbackMu.Lock()
+	defer l.callbackMu.Unlock()
+	if err := validateNativeText([2]string{"sessionID", sessionID}); err != nil {
+		return err
+	}
 	lane, err := l.acquire()
 	if err != nil {
 		return err
@@ -929,17 +790,27 @@ func (l *StreamLane) Close() error {
 		return nil
 	}
 	if l.closing {
-		for l.lane != nil {
+		for l.closing && l.lane != nil {
 			l.drained.Wait()
 		}
-		l.mu.Unlock()
-		return nil
+		if l.lane == nil {
+			l.mu.Unlock()
+			return nil
+		}
 	}
 	l.closing = true
 	lane := l.lane
 	l.mu.Unlock()
 	status := C.coakka_v2_go_stream_lane_stop(l.bindings.ptr, (*C.coakka_v2_stream_lane_t)(lane))
 	l.mu.Lock()
+	if status != 0 {
+		// A refused join is not retirement. Keep owners and callback roots for
+		// an external Close retry; never destroy a still-running worker's state.
+		l.closing = false
+		l.drained.Broadcast()
+		l.mu.Unlock()
+		return nativeStatusError("stream_lane_stop", int(status))
+	}
 	for l.active != 0 {
 		l.drained.Wait()
 	}
@@ -952,8 +823,5 @@ func (l *StreamLane) Close() error {
 	l.lane = nil
 	l.drained.Broadcast()
 	l.mu.Unlock()
-	if status != 0 && status != -7 {
-		return fmt.Errorf("stream_lane_stop failed: native status %d", int(status))
-	}
 	return nil
 }

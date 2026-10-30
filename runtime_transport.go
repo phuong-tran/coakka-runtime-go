@@ -3,7 +3,7 @@ package coakka_v2_connector
 import "fmt"
 
 func ReadRuntimeCapabilities(runtimeLibPath string) (RuntimeCapabilitiesSnapshot, error) {
-	resolvedRuntimeLib, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath, nil)
+	resolvedRuntimeLib, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath)
 	if err != nil {
 		return RuntimeCapabilitiesSnapshot{}, err
 	}
@@ -57,13 +57,6 @@ func (c *GoRuntimeClient) TCPSecurityInfo() (RuntimeTCPSecurityInfoSnapshot, err
 	return c.bindings.getTCPSecurityInfo(c.runtime)
 }
 
-func (c *GoRuntimeClient) StartupTCPConnectionResult() (RuntimeTCPConnectionApplyResult, bool) {
-	if c.startupConnectionResult == nil {
-		return RuntimeTCPConnectionApplyResult{}, false
-	}
-	return *c.startupConnectionResult, true
-}
-
 func (c *GoRuntimeClient) StartupTCPSecurityResult() (RuntimeTCPSecurityApplyResult, bool) {
 	if c.startupSecurityResult == nil {
 		return RuntimeTCPSecurityApplyResult{}, false
@@ -101,7 +94,7 @@ func (c *GoRuntimeClient) ApplyTCPSecurity(
 
 func (c *GoRuntimeClient) requireTransportOpen() error {
 	select {
-	case <-c.closedCh:
+	case <-c.lifetime.closed:
 		return fmt.Errorf("runtime client closed")
 	default:
 		return nil
@@ -118,10 +111,6 @@ func (o *ConnectorOrchestrator) TCPConnectionConfig() (RuntimeTCPConnectionConfi
 
 func (o *ConnectorOrchestrator) TCPSecurityInfo() (RuntimeTCPSecurityInfoSnapshot, error) {
 	return o.Client.TCPSecurityInfo()
-}
-
-func (o *ConnectorOrchestrator) StartupTCPConnectionResult() (RuntimeTCPConnectionApplyResult, bool) {
-	return o.Client.StartupTCPConnectionResult()
 }
 
 func (o *ConnectorOrchestrator) StartupTCPSecurityResult() (RuntimeTCPSecurityApplyResult, bool) {

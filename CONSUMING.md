@@ -1,95 +1,39 @@
-# Consuming The Go Runtime Package
+# Consuming the Go 3.0.0 package
 
-This is the Go connector for the polyglot, multi-language, multi-platform
-CoAkka Runtime ecosystem. The public Go module includes the matching native
-runtime libraries:
+Use exactly github.com/phuong-tran/coakka-runtime-go/v3 at v3.0.0 after its
+authorized publication. Before publication, an admitted local module is the
+only candidate source; use a standard Go module replacement. The module path,
+semantic major, package source and bundled native generation must agree.
 
-```sh
-go get github.com/phuong-tran/coakka-runtime-go@v1.8.3
-```
+Build with CGO_ENABLED=1 and a C11 compiler. The four non-Windows-ARM profiles
+use Go1.22.12 as the compatibility floor; native Windows ARM64 uses Go1.25.5
+with its matching ARM64 C compiler. Go packages have no external module
+dependencies. Toolchains and optional packaging helpers are build tools, not
+installed application dependencies.
 
-Every module release records its connector version and bundled native runtime
-generation separately.
+One exact Core3.0.0/1522b4a9 image is embedded for the selected GOOS/GOARCH.
+The five target closures are macOS ARM64, Linux ARM64/x64 and Windows ARM64/x64.
+Source presence or cross-compilation cannot establish another target's runtime
+support. Keep the selected candidate's platform and minimum-OS evidence.
 
-Example consumer `go.mod`:
+Run the compiled app away from the module/build tree, without native-path
+overrides. The loader owns image extraction, integrity and its digest-addressed
+cache. Reuse and concurrent cold publication must preserve one exact image.
+An existing corrupt cache entry is refused without replacement or fallback.
 
-```go
-module my-runtime-consumer
+Applications own identity, routes, handlers, request budgets and process
+shutdown. Core owns accepted defaults/effective values and causal results.
+AUTO execution and MULTIPLEXED connections are omitted-input defaults.
+Use returned facts, not input reconstruction, to report native state.
 
-go 1.22
+Always attempt host/lane cleanup on an error and preserve both failures.
+Retire observation/callback borrows before native owners. Do not call process
+exit from a handler. A failed native close must not delete files beneath active
+I/O or discard the owner needed for a documented explicit retry.
 
-require github.com/phuong-tran/coakka-runtime-go v1.8.3
-```
+Release builds should use trimpath and strip private debug/path data.
+The qualification additionally exercises a real Go shrink/obfuscation tool and
+keeps its maps privately. A passing stripped build alone is not proof of
+obfuscation or whole-process leak absence.
 
-Go `1.22` is the module compatibility floor. For production builds, use a
-currently supported Go release; CI verifies both Go `1.22.12` compatibility
-and the current stable toolchain.
-
-Example:
-
-```go
-package main
-
-import (
-	"time"
-
-	connector "github.com/phuong-tran/coakka-runtime-go"
-)
-
-func main() {
-	runtimeHost, err := connector.StartRuntimeHost(connector.ConnectorStartSpec{
-		SystemName: "sample",
-		NodeID:     "sample-node",
-		Routes:     []connector.RouteSpec{connector.LocalRouteDefault("svc.echo")},
-	}, "")
-	if err != nil {
-		panic(err)
-	}
-	defer runtimeHost.Close()
-
-	_, _ = runtimeHost.AwaitNextMonitor(10 * time.Millisecond)
-}
-```
-
-Library resolution order:
-
-- explicit path passed to `StartRuntimeHost(startSpec, runtimeLibPath)`
-- `$COAKKA_RUNTIME_LIB`
-- packaged native library under `native/<platform>/`
-- local fallback candidates under `lib/`
-
-Package targets:
-
-- `macos-aarch64`
-- `linux-aarch64`
-- `linux-x86_64`
-- `windows-aarch64`
-- `windows-x86_64`
-
-All five native digests and binary formats are verified during packaging.
-Exact module `v1.8.3` request/reply passes on macOS ARM64. Module source and
-consumer-shaped package tests pass on Linux x86-64 with Go `1.22.12` and the
-current stable toolchain. Exact native generation `2.5.1+26f7944de4a4e0598845a54e4775f9463a9e33be` retains the
-previous matching-host request/reply evidence on Linux
-ARM64/x86-64. Both Windows payloads pass package, export, dependency, and
-digest gates; matching Go-on-Windows execution is not recorded. Read
-[Transport Configuration](TRANSPORT_CONFIGURATION.md) before selecting a
-non-default connection mode or TLS/mTLS, and use the canonical
-[troubleshooting guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/troubleshooting.md)
-for loader, architecture, certificate, and publisher-trust failures.
-
-One Go process may start one active runtime host. `StartConnectorOrchestrator`
-remains as the compatibility name for the same lifecycle owner.
-
-For plain text request identities, prefer:
-
-```go
-identity := connector.NewTextPayloadIdentity("demo.echo.request.v1")
-```
-
-`PayloadFormatPlainText` remains as a compatibility alias; new user-facing code
-should use `PayloadFormatText`.
-
-Repository:
-
-- `https://github.com/phuong-tran/coakka-runtime-go`
+See README.md for migration from v1 and RELEASE.md for exact candidate gates.

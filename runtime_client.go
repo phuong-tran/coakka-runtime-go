@@ -1,14 +1,17 @@
 package coakka_v2_connector
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,8 +31,6 @@ type RuntimeClientStats struct {
 	DeliveredRequests              int `json:"deliveredRequests"`
 	MatchedResponses               int `json:"matchedResponses"`
 	MatchedDeadletters             int `json:"matchedDeadletters"`
-	LateResponses                  int `json:"lateResponses"`
-	UnhandledDeadletters           int `json:"unhandledDeadletters"`
 	TerminalEventDropCount         int `json:"terminalEventDropCount"`
 	DeadletterObservationDropCount int `json:"deadletterObservationDropCount"`
 }
@@ -42,11 +43,13 @@ type RuntimeConnectorSnapshot struct {
 }
 
 type RuntimeSnapshot struct {
-	RuntimeInfo   RuntimeInfoSnapshot      `json:"runtimeInfo"`
-	RuntimeConfig RuntimeConfigSnapshot    `json:"runtimeConfig"`
-	Connector     RuntimeConnectorSnapshot `json:"connector"`
-	Health        RuntimeHealthSnapshot    `json:"health"`
-	Stats         RuntimeStatsSnapshot     `json:"stats"`
+	RuntimeInfo   RuntimeInfoSnapshot          `json:"runtimeInfo"`
+	StartupConfig RuntimeStartupConfigSnapshot `json:"startupConfig"`
+	RuntimeConfig RuntimeConfigSnapshot        `json:"runtimeConfig"`
+	NetworkConfig RuntimeNetworkSnapshot       `json:"networkConfig"`
+	Connector     RuntimeConnectorSnapshot     `json:"connector"`
+	Health        RuntimeHealthSnapshot        `json:"health"`
+	Stats         RuntimeStatsSnapshot         `json:"stats"`
 }
 
 type MonitorSnapshot struct {
@@ -55,43 +58,77 @@ type MonitorSnapshot struct {
 	Stats       RuntimeStatsSnapshot  `json:"stats"`
 }
 
+// HandlerFn runs bounded application work. Do not synchronously Close this host
+// from its handler: Close joins the caller's handler/reader lifetime.
 type HandlerFn func(request *Envelope) *Envelope
 
+// PayloadHandlerFn borrows the synchronous reader turn. Return promptly and
+// request host shutdown from outside that turn, never synchronously Close it.
+type PayloadHandlerFn func(payload []byte) []byte
+
 type registeredHandler struct {
-	handler      HandlerFn
-	typedReplies bool
+	handler        HandlerFn
+	payloadHandler PayloadHandlerFn
+	typedReplies   bool
 }
 
-type pendingResult struct {
-	response *Envelope
-	err      error
+type deliveredRequestJob struct {
+	request    *nativeDeliveredRequest
+	registered registeredHandler
 }
 
-type pendingRequest struct {
-	ch chan pendingResult
+type handlerScheduling struct {
+	capacity int
+	workers  int
+	queue    *handlerDispatchQueue
 }
 
-type trackedRequest struct {
-	messageID     string
-	correlationID string
+type encodedPayloadSource struct {
+	source  nativeCString
+	replyTo nativeCString
 }
+
+type runtimeClientCounters struct {
+	corePending                atomic.Int64
+	deliveredRequests          atomic.Int64
+	matchedResponses           atomic.Int64
+	matchedDeadletters         atomic.Int64
+	terminalEventDrops         atomic.Int64
+	deadletterObservationDrops atomic.Int64
+}
+
+const (
+	payloadEncodingCacheCapacity = 64
+	payloadEncodingCacheBytes    = 256 * 1024
+	handlerRegistrationCapacity  = 256
+	handlerRegistrationBytes     = 64 * 1024
+	observerCapacity             = 64
+	observerBufferCapacity       = 1024
+)
 
 type GoRuntimeClient struct {
-	config                       ConnectorConfig
-	bindings                     *nativeBindings
-	runtime                      nativeRuntime
-	hostHandles                  HostHandlesSnapshot
-	separateDeliveredRequestLane bool
+	bindings               *nativeBindings
+	runtime                nativeRuntime
+	hostHandles            HostHandlesSnapshot
+	requestReader          nativeRequestReader
+	askClient              nativeAskClient
+	payloadMessagePrefix   []byte
+	nextPayloadMessageID   atomic.Uint64
+	handlerSchedule        handlerScheduling
+	lastDispatchTarget     []byte
+	lastDispatchHandler    registeredHandler
+	lastDispatchHandlerSet bool
 
-	pendingMu sync.Mutex
-	pending   map[string]*pendingRequest
+	payloadEncodingMu    sync.Mutex
+	payloadSources       sync.Map
+	payloadTargets       sync.Map
+	payloadSourceCount   int
+	payloadTargetCount   int
+	payloadRetainedBytes int
 
-	trackedMu                        sync.Mutex
-	trackedRequestsByMessageID       map[string]trackedRequest
-	trackedRequestMessageIDsByCorrID map[string]string
-
-	handlersMu sync.RWMutex
-	handlers   map[string]registeredHandler
+	handlersMu         sync.RWMutex
+	handlers           map[string]registeredHandler
+	handlerTargetBytes int
 
 	terminalSubscribersMu    sync.Mutex
 	terminalSubscribers      map[uint64]chan RequestTerminalEvent
@@ -101,21 +138,16 @@ type GoRuntimeClient struct {
 	deadletterSubscribers      map[uint64]chan ObservedDeadletter
 	nextDeadletterSubscriberID uint64
 
-	submitMu                sync.Mutex
-	statsMu                 sync.Mutex
-	stats                   RuntimeClientStats
-	transportMu             sync.Mutex
-	startupConnectionResult *RuntimeTCPConnectionApplyResult
-	startupSecurityResult   *RuntimeTCPSecurityApplyResult
+	counters              runtimeClientCounters
+	transportMu           sync.Mutex
+	startupSecurityResult *RuntimeTCPSecurityApplyResult
 
 	monitorSignalCh chan uint64
-	closedCh        chan struct{}
-	closeOnce       sync.Once
-	wg              sync.WaitGroup
+	lifetime        runtimeLifetime
+	backgroundWG    sync.WaitGroup
 }
 
 func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRuntimeClient, error) {
-	config.Network = config.Network.Normalized()
 	if err := config.RequireValid(); err != nil {
 		return nil, err
 	}
@@ -123,9 +155,9 @@ func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRunti
 	if err != nil {
 		return nil, err
 	}
-	if bindings.getAbiVersion() != COAKKAABIVersion {
+	if abi := bindings.getAbiVersion(); abi != COAKKAABIVersion {
 		bindings.close()
-		return nil, fmt.Errorf("unexpected ABI version: %d", bindings.getAbiVersion())
+		return nil, fmt.Errorf("unexpected ABI version: %d", abi)
 	}
 	runtime, err := bindings.createRuntime(config)
 	if err != nil {
@@ -133,36 +165,18 @@ func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRunti
 		return nil, err
 	}
 	client := &GoRuntimeClient{
-		config:                           config,
-		bindings:                         bindings,
-		runtime:                          runtime,
-		pending:                          make(map[string]*pendingRequest),
-		trackedRequestsByMessageID:       make(map[string]trackedRequest),
-		trackedRequestMessageIDsByCorrID: make(map[string]string),
-		handlers:                         make(map[string]registeredHandler),
-		terminalSubscribers:              make(map[uint64]chan RequestTerminalEvent),
-		deadletterSubscribers:            make(map[uint64]chan ObservedDeadletter),
-		monitorSignalCh:                  make(chan uint64, 64),
-		closedCh:                         make(chan struct{}),
+		bindings:              bindings,
+		runtime:               runtime,
+		handlers:              make(map[string]registeredHandler),
+		terminalSubscribers:   make(map[uint64]chan RequestTerminalEvent),
+		deadletterSubscribers: make(map[uint64]chan ObservedDeadletter),
+		monitorSignalCh:       make(chan uint64, 64),
+		lifetime:              runtimeLifetime{closed: make(chan struct{})},
 	}
 	if err := bindings.applyNetworkOptions(runtime, config.Network); err != nil {
 		bindings.destroyRuntime(runtime)
 		bindings.close()
 		return nil, err
-	}
-	if config.ConnectionStrategy != nil {
-		result, applyErr := bindings.applyTCPConnectionStrategy(runtime, *config.ConnectionStrategy)
-		if applyErr != nil {
-			bindings.destroyRuntime(runtime)
-			bindings.close()
-			return nil, applyErr
-		}
-		client.startupConnectionResult = &result
-		if !result.Applied() {
-			bindings.destroyRuntime(runtime)
-			bindings.close()
-			return nil, &RuntimeTCPConnectionApplyError{Result: result}
-		}
 	}
 	if config.Security != nil {
 		result, applyErr := bindings.applyTCPSecurity(runtime, *config.Security)
@@ -178,7 +192,19 @@ func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRunti
 			return nil, &RuntimeTCPSecurityApplyError{Result: result}
 		}
 	}
-	hostHandles, err := bindings.getHostHandles(runtime, client.hostHandleFlags())
+	initial, err := bindings.getStartupConfig(runtime)
+	if err != nil {
+		// No host handles have been exported yet; there is no descriptor owner
+		// to close here (a zero-valued handle record is not an empty owner).
+		bindings.destroyRuntime(runtime)
+		bindings.close()
+		return nil, err
+	}
+	var handleFlags uint32
+	if initial.Monitor.Enabled {
+		handleFlags = HostHandlesEnableMonitor
+	}
+	hostHandles, err := bindings.getHostHandles(runtime, handleFlags)
 	if err != nil {
 		bindings.destroyRuntime(runtime)
 		bindings.close()
@@ -204,19 +230,40 @@ func NewGoRuntimeClient(runtimeLibPath string, config ConnectorConfig) (*GoRunti
 		client.cleanupNative()
 		return nil, err
 	}
-	deliveredRequestFD := hostHandles.DeliveredRequestReadFD
-	responseFD := hostHandles.ResponseReadFD
-	client.separateDeliveredRequestLane = deliveredRequestFD >= 0 && deliveredRequestFD != responseFD
-	requestReadFD := responseFD
-	if deliveredRequestFD >= 0 {
-		requestReadFD = deliveredRequestFD
+	requestReader, err := bindings.createRequestReader(runtime, hostHandles)
+	if err != nil {
+		_ = bindings.stopRuntime(runtime)
+		client.cleanupNative()
+		return nil, err
 	}
-	client.startEnvelopeReader(requestReadFD, "request", client.onRequestFrame)
-	if client.separateDeliveredRequestLane {
-		client.startEnvelopeReader(responseFD, "response", client.onResponseFrame)
+	client.requestReader = requestReader
+	askClient, err := bindings.createAskClient(runtime, hostHandles)
+	if err != nil {
+		bindings.destroyRequestReader(requestReader)
+		client.requestReader = nil
+		_ = bindings.stopRuntime(runtime)
+		client.cleanupNative()
+		return nil, err
 	}
-	client.startEnvelopeReader(hostHandles.DeadletterReadFD, "deadletter", client.onDeadletterFrame)
-	if hostHandles.MonitorReadFD >= 0 {
+	client.askClient = askClient
+	client.payloadMessagePrefix = append([]byte(config.NodeID), ".go."...)
+	startup, err := bindings.getStartupConfig(runtime)
+	if err != nil {
+		bindings.destroyAskClient(askClient)
+		client.askClient = nil
+		bindings.destroyRequestReader(requestReader)
+		client.requestReader = nil
+		_ = bindings.stopRuntime(runtime)
+		client.cleanupNative()
+		return nil, err
+	}
+	handlerWorkers := int(startup.Execution.SelectedCPUCount)
+	if handlerWorkers < 1 {
+		handlerWorkers = 1
+	}
+	client.handlerSchedule = handlerScheduling{capacity: int(startup.QueueCapacity), workers: handlerWorkers}
+	client.startRequestReader()
+	if hostHandles.Flags&HostHandlesEnableMonitor != 0 {
 		client.startMonitorReader(hostHandles.MonitorReadFD)
 	}
 	return client, nil
@@ -231,6 +278,10 @@ func NextMessageID(source string) string {
 }
 
 func MakeTypedRequest(source string, target string, payload []byte, payloadIdentity PayloadIdentity, timeout time.Duration, operation string, deliveryHint DeliveryHint, headers map[string]string, messageID string, oneWay bool) (*Envelope, error) {
+	timeoutMillis, err := envelopeTimeoutMillis(timeout)
+	if err != nil {
+		return nil, err
+	}
 	if err := payloadIdentity.RequireTyped("typed request"); err != nil {
 		return nil, err
 	}
@@ -252,7 +303,7 @@ func MakeTypedRequest(source string, target string, payload []byte, payloadIdent
 		ReplyTo:              "",
 		Kind:                 MessageKindRequest,
 		OneWay:               oneWay,
-		TimeoutMs:            int32(timeout / time.Millisecond),
+		TimeoutMs:            timeoutMillis,
 		Payload:              payload,
 		Headers:              outHeaders,
 		Status:               BusinessStatusOK,
@@ -331,7 +382,11 @@ func MakeJSONReplyFromRequestIdentity(request *Envelope, source string, payload 
 	return MakeReplyFromRequestIdentity(request, source, bytes)
 }
 
-func MakeRawRequest(messageID string, source string, target string, replyTo string, payload []byte, timeout time.Duration, deliveryHint DeliveryHint) *Envelope {
+func MakeRawRequest(messageID string, source string, target string, replyTo string, payload []byte, timeout time.Duration, deliveryHint DeliveryHint) (*Envelope, error) {
+	timeoutMillis, err := envelopeTimeoutMillis(timeout)
+	if err != nil {
+		return nil, err
+	}
 	if messageID == "" {
 		messageID = NextMessageID(source)
 	}
@@ -343,20 +398,23 @@ func MakeRawRequest(messageID string, source string, target string, replyTo stri
 		ReplyTo:       replyTo,
 		Kind:          MessageKindRequest,
 		OneWay:        false,
-		TimeoutMs:     int32(timeout / time.Millisecond),
+		TimeoutMs:     timeoutMillis,
 		Payload:       payload,
 		Headers:       map[string]string{},
 		Status:        BusinessStatusOK,
 		DeliveryHint:  deliveryHint,
-	}
+	}, nil
 }
 
-func MakeRawOneWay(messageID string, source string, target string, payload []byte, timeout time.Duration, deliveryHint DeliveryHint) *Envelope {
-	out := MakeRawRequest(messageID, source, target, "", payload, timeout, deliveryHint)
+func MakeRawOneWay(messageID string, source string, target string, payload []byte, timeout time.Duration, deliveryHint DeliveryHint) (*Envelope, error) {
+	out, err := MakeRawRequest(messageID, source, target, "", payload, timeout, deliveryHint)
+	if err != nil {
+		return nil, err
+	}
 	out.CorrelationId = ""
 	out.ReplyTo = ""
 	out.OneWay = true
-	return out
+	return out, nil
 }
 
 func RequireTypedPayloadIdentity(envelope *Envelope, what string) (PayloadIdentity, error) {
@@ -373,9 +431,7 @@ func (c *GoRuntimeClient) AskTyped(source string, target string, payload []byte,
 	if err != nil {
 		return nil, err
 	}
-	return c.submitPendingRequest(envelope, timeout, func(normalized *Envelope) error {
-		return c.SubmitTypedEnvelope(normalized)
-	})
+	return c.submitPendingRequest(envelope, timeout)
 }
 
 func (c *GoRuntimeClient) AskJSON(source string, target string, payload any, payloadIdentity PayloadIdentity, timeout time.Duration, operation string, deliveryHint DeliveryHint, headers map[string]string) (map[string]any, error) {
@@ -394,29 +450,123 @@ func (c *GoRuntimeClient) AskJSON(source string, target string, payload any, pay
 	return out, nil
 }
 
+// AskPayload performs one raw request/reply without constructing connector
+// Envelope values. Core builds and validates the request, matches the terminal
+// result and projects the response payload into Go-owned bytes.
+func (c *GoRuntimeClient) AskPayload(source string, target string, payload []byte, timeout time.Duration, deliveryHint DeliveryHint) ([]byte, error) {
+	if !c.beginCall() {
+		return nil, ErrClosed
+	}
+	defer c.endCall()
+	timeoutMillis, err := coreTimeoutMillis(timeout)
+	if err != nil {
+		return nil, err
+	}
+	if timeoutMillis > uint32(^uint32(0)>>1) {
+		return nil, fmt.Errorf("request timeout exceeds Core int32 millisecond range")
+	}
+	sequence := c.nextPayloadMessageID.Add(1)
+	messageID := make(nativeCString, 0, len(c.payloadMessagePrefix)+20+1)
+	messageID = append(messageID, c.payloadMessagePrefix...)
+	messageID = strconv.AppendUint(messageID, sequence, 10)
+	messageID = append(messageID, 0)
+	encodedSource, err := c.encodedPayloadSource(source)
+	if err != nil {
+		return nil, err
+	}
+	encodedTarget, err := c.encodedPayloadTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	c.counters.corePending.Add(1)
+	defer func() {
+		c.counters.corePending.Add(-1)
+	}()
+	kind, resultBytes, status, err := c.bindings.askPayload(
+		c.askClient,
+		messageID,
+		encodedSource.source,
+		encodedTarget,
+		encodedSource.replyTo,
+		payload,
+		timeoutMillis,
+		timeoutMillis,
+		deliveryHint,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if status == COAKKAErrWouldBlock {
+		return nil, nativeStatusError("ask_payload", status)
+	}
+	if status == COAKKAErrClosed {
+		return nil, nativeStatusError("ask_payload", status)
+	}
+	if kind == nativeClientResultResponse {
+		c.counters.matchedResponses.Add(1)
+		return resultBytes, nil
+	}
+	if kind == nativeClientResultDeadletter {
+		deadletter, decodeErr := c.bindings.decodeDeadletter(resultBytes)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		c.counters.matchedDeadletters.Add(1)
+		return nil, &DeadletterError{Deadletter: deadletter}
+	}
+	return nil, fmt.Errorf("Core returned unknown ask result kind=%d", kind)
+}
+
+func (c *GoRuntimeClient) encodedPayloadSource(value string) (encodedPayloadSource, error) {
+	if cached, ok := c.payloadSources.Load(value); ok {
+		return cached.(encodedPayloadSource), nil
+	}
+	source, err := makeNativeCString("source", value)
+	if err != nil {
+		return encodedPayloadSource{}, err
+	}
+	replyTo := make(nativeCString, 0, len(value)+len("/replies")+1)
+	replyTo = append(replyTo, value...)
+	replyTo = append(replyTo, "/replies"...)
+	replyTo = append(replyTo, 0)
+	encoded := encodedPayloadSource{source: source, replyTo: replyTo}
+	c.payloadEncodingMu.Lock()
+	if existing, exists := c.payloadSources.Load(value); exists {
+		encoded = existing.(encodedPayloadSource)
+	} else if cost := 3*len(value) + len("/replies") + 64; c.payloadSourceCount < payloadEncodingCacheCapacity && cost <= payloadEncodingCacheBytes-c.payloadRetainedBytes {
+		// Own the key: a tiny substring must not retain the caller's huge backing.
+		c.payloadSources.Store(strings.Clone(value), encoded)
+		c.payloadSourceCount++
+		c.payloadRetainedBytes += cost
+	}
+	c.payloadEncodingMu.Unlock()
+	return encoded, nil
+}
+
+func (c *GoRuntimeClient) encodedPayloadTarget(value string) (nativeCString, error) {
+	if cached, ok := c.payloadTargets.Load(value); ok {
+		return cached.(nativeCString), nil
+	}
+	encoded, err := makeNativeCString("target", value)
+	if err != nil {
+		return nil, err
+	}
+	c.payloadEncodingMu.Lock()
+	if existing, exists := c.payloadTargets.Load(value); exists {
+		encoded = existing.(nativeCString)
+	} else if cost := 2*len(value) + 32; c.payloadTargetCount < payloadEncodingCacheCapacity && cost <= payloadEncodingCacheBytes-c.payloadRetainedBytes {
+		c.payloadTargets.Store(strings.Clone(value), encoded)
+		c.payloadTargetCount++
+		c.payloadRetainedBytes += cost
+	}
+	c.payloadEncodingMu.Unlock()
+	return encoded, nil
+}
+
 func (c *GoRuntimeClient) AskRaw(request *Envelope, timeout time.Duration) (*Envelope, error) {
-	if request.GetKind() != MessageKindRequest {
-		return nil, fmt.Errorf("AskRaw requires MESSAGE_KIND_REQUEST")
-	}
-	if request.GetOneWay() {
-		return nil, fmt.Errorf("AskRaw requires oneWay=false")
-	}
-	if request.GetMessageId() == "" {
-		return nil, fmt.Errorf("AskRaw requires messageId")
-	}
-	normalized := cloneEnvelope(request)
-	if normalized.CorrelationId == "" {
-		normalized.CorrelationId = normalized.MessageId
-	}
-	if timeout <= 0 {
-		timeout = time.Duration(normalized.GetTimeoutMs()) * time.Millisecond
-	}
-	if timeout <= 0 {
-		timeout = time.Second
-	}
-	return c.submitPendingRequest(normalized, timeout, func(envelope *Envelope) error {
-		return c.SubmitRawEnvelope(envelope)
-	})
+	// Core validates request kind/identity and normalizes missing correlation.
+	// The explicit Go wait budget is never reconstructed from envelope input.
+	return c.submitPendingRequest(request, timeout)
 }
 
 func (c *GoRuntimeClient) SubmitRequestTyped(source string, target string, payload []byte, payloadIdentity PayloadIdentity, timeout time.Duration, operation string, deliveryHint DeliveryHint, headers map[string]string) (*SubmittedRequest, error) {
@@ -424,9 +574,7 @@ func (c *GoRuntimeClient) SubmitRequestTyped(source string, target string, paylo
 	if err != nil {
 		return nil, err
 	}
-	return c.submitTrackedRequest(envelope, func(normalized *Envelope) error {
-		return c.SubmitTypedEnvelope(normalized)
-	})
+	return c.submitTicketRequest(envelope)
 }
 
 func (c *GoRuntimeClient) SubmitRequestJSON(source string, target string, payload any, payloadIdentity PayloadIdentity, timeout time.Duration, operation string, deliveryHint DeliveryHint, headers map[string]string) (*SubmittedRequest, error) {
@@ -438,9 +586,7 @@ func (c *GoRuntimeClient) SubmitRequestJSON(source string, target string, payloa
 }
 
 func (c *GoRuntimeClient) SubmitRequestRaw(request *Envelope) (*SubmittedRequest, error) {
-	return c.submitTrackedRequest(request, func(normalized *Envelope) error {
-		return c.SubmitRawEnvelope(normalized)
-	})
+	return c.submitTicketRequest(request)
 }
 
 func (c *GoRuntimeClient) SendOneWayTyped(source string, target string, payload []byte, payloadIdentity PayloadIdentity, deliveryHint DeliveryHint, headers map[string]string) error {
@@ -471,17 +617,21 @@ func (c *GoRuntimeClient) SubmitTypedEnvelope(envelope *Envelope) error {
 }
 
 func (c *GoRuntimeClient) SubmitRawEnvelope(envelope *Envelope) error {
-	bytes, err := encodeEnvelope(envelope)
+	if !c.beginCall() {
+		return ErrClosed
+	}
+	defer c.endCall()
+	bytes, err := c.bindings.encodeEnvelope(envelope)
 	if err != nil {
 		return err
 	}
-	c.submitMu.Lock()
-	defer c.submitMu.Unlock()
+	// Core owns concurrent ingress admission and its serialization. A Go-side
+	// mutex here would duplicate Core policy and unnecessarily couple callers.
 	return c.bindings.submitEnvelope(c.runtime, bytes)
 }
 
 func (c *GoRuntimeClient) ApplySnapshot(generation uint64, routes []RouteSpec, sourceConnector string, seq uint64) error {
-	return c.ApplySnapshotWithPolicy(generation, routes, sourceConnector, seq, c.config.OverloadPolicy)
+	return c.ApplySnapshotWithPolicy(generation, routes, sourceConnector, seq, nil)
 }
 
 func (c *GoRuntimeClient) ApplySnapshotWithPolicy(
@@ -491,27 +641,43 @@ func (c *GoRuntimeClient) ApplySnapshotWithPolicy(
 	seq uint64,
 	overloadPolicy *RuntimeOverloadPolicy,
 ) error {
-	if overloadPolicy != nil {
-		if err := overloadPolicy.RequireValid(); err != nil {
-			return err
-		}
+	if !c.beginCall() {
+		return ErrClosed
 	}
+	defer c.endCall()
 	bytes, err := c.buildControlEnvelopeBytes(generation, routes, sourceConnector, seq, overloadPolicy)
 	if err != nil {
 		return err
 	}
-	c.submitMu.Lock()
-	defer c.submitMu.Unlock()
 	return c.bindings.applyControlEnvelope(c.runtime, bytes)
 }
 
 func (c *GoRuntimeClient) RegisterHandler(target string, handler HandlerFn, typedReplies bool) error {
+	if !c.beginCall() {
+		return ErrClosed
+	}
+	defer c.endCall()
+	if handler == nil {
+		return fmt.Errorf("handler must not be nil")
+	}
+	if err := validateNativeText([2]string{"handler target", target}); err != nil {
+		return err
+	}
 	c.handlersMu.Lock()
 	defer c.handlersMu.Unlock()
 	if _, exists := c.handlers[target]; exists {
 		return fmt.Errorf("handler already registered for target=%s", target)
 	}
-	c.handlers[target] = registeredHandler{handler: handler, typedReplies: typedReplies}
+	if len(c.handlers) >= handlerRegistrationCapacity || len(target) > handlerRegistrationBytes-c.handlerTargetBytes {
+		return fmt.Errorf("Go handler registration capacity exhausted")
+	}
+	if c.handlerSchedule.queue == nil {
+		queue := newHandlerDispatchQueue(c.handlerSchedule.capacity)
+		c.handlerSchedule.queue = queue
+		c.startHandlerWorkers(queue, c.handlerSchedule.workers)
+	}
+	c.handlers[strings.Clone(target)] = registeredHandler{handler: handler, typedReplies: typedReplies}
+	c.handlerTargetBytes += len(target)
 	return nil
 }
 
@@ -519,101 +685,180 @@ func (c *GoRuntimeClient) RegisterRawHandler(target string, handler HandlerFn) e
 	return c.RegisterHandler(target, handler, false)
 }
 
-func (c *GoRuntimeClient) TerminalEvents(ctx context.Context, buffer int) <-chan RequestTerminalEvent {
+// RegisterPayloadHandler installs the allocation-lean raw payload path. Core
+// remains responsible for request validation, target/one-way projection and
+// reply identity. The synchronous handler runs on the sole request-reader turn
+// and must return promptly; use RegisterHandler for work that needs dispatch to
+// the bounded handler workers.
+func (c *GoRuntimeClient) RegisterPayloadHandler(target string, handler PayloadHandlerFn) error {
+	if !c.beginCall() {
+		return ErrClosed
+	}
+	defer c.endCall()
+	if err := validateNativeText([2]string{"handler target", target}); err != nil {
+		return err
+	}
+	if handler == nil {
+		return fmt.Errorf("payload handler must not be nil")
+	}
+	c.handlersMu.Lock()
+	defer c.handlersMu.Unlock()
+	if _, exists := c.handlers[target]; exists {
+		return fmt.Errorf("handler already registered for target=%s", target)
+	}
+	if len(c.handlers) >= handlerRegistrationCapacity || len(target) > handlerRegistrationBytes-c.handlerTargetBytes {
+		return fmt.Errorf("Go handler registration capacity exhausted")
+	}
+	c.handlers[strings.Clone(target)] = registeredHandler{payloadHandler: handler}
+	c.handlerTargetBytes += len(target)
+	return nil
+}
+
+func (c *GoRuntimeClient) TerminalEvents(ctx context.Context, buffer int) (<-chan RequestTerminalEvent, error) {
+	if !c.beginCall() {
+		return nil, ErrClosed
+	}
+	defer c.endCall()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if buffer <= 0 {
 		buffer = 16
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if buffer > observerBufferCapacity {
+		return nil, fmt.Errorf("Go observer buffer exceeds %d slots", observerBufferCapacity)
+	}
 	events := make(chan RequestTerminalEvent, buffer)
-	subscriberID := c.addTerminalSubscriber(events)
+	subscriberID, err := c.addTerminalSubscriber(events)
+	if err != nil {
+		return nil, err
+	}
 	go func() {
 		select {
 		case <-ctx.Done():
-		case <-c.closedCh:
+		case <-c.lifetime.closed:
 		}
 		c.removeTerminalSubscriber(subscriberID, events)
 	}()
-	return events
+	return events, nil
 }
 
-func (c *GoRuntimeClient) Deadletters(ctx context.Context, buffer int) <-chan ObservedDeadletter {
+func (c *GoRuntimeClient) Deadletters(ctx context.Context, buffer int) (<-chan ObservedDeadletter, error) {
+	if !c.beginCall() {
+		return nil, ErrClosed
+	}
+	defer c.endCall()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if buffer <= 0 {
 		buffer = 128
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if buffer > observerBufferCapacity {
+		return nil, fmt.Errorf("Go observer buffer exceeds %d slots", observerBufferCapacity)
+	}
 	events := make(chan ObservedDeadletter, buffer)
-	subscriberID := c.addDeadletterSubscriber(events)
+	subscriberID, err := c.addDeadletterSubscriber(events)
+	if err != nil {
+		return nil, err
+	}
 	go func() {
 		select {
 		case <-ctx.Done():
-		case <-c.closedCh:
+		case <-c.lifetime.closed:
 		}
 		c.removeDeadletterSubscriber(subscriberID, events)
 	}()
-	return events
+	return events, nil
 }
 
 func (c *GoRuntimeClient) SnapshotStats() RuntimeClientStats {
-	c.statsMu.Lock()
-	defer c.statsMu.Unlock()
-	out := c.stats
-	c.pendingMu.Lock()
-	out.PendingRequests = len(c.pending)
-	c.pendingMu.Unlock()
-	return out
+	return RuntimeClientStats{
+		PendingRequests:                int(c.counters.corePending.Load()),
+		DeliveredRequests:              int(c.counters.deliveredRequests.Load()),
+		MatchedResponses:               int(c.counters.matchedResponses.Load()),
+		MatchedDeadletters:             int(c.counters.matchedDeadletters.Load()),
+		TerminalEventDropCount:         int(c.counters.terminalEventDrops.Load()),
+		DeadletterObservationDropCount: int(c.counters.deadletterObservationDrops.Load()),
+	}
 }
 
-func (c *GoRuntimeClient) HealthSnapshot() RuntimeHealthSnapshot {
+func (c *GoRuntimeClient) HealthSnapshot() (RuntimeHealthSnapshot, error) {
+	if !c.beginCall() {
+		return RuntimeHealthSnapshot{}, ErrClosed
+	}
+	defer c.endCall()
+	return c.bindings.getHealth(c.runtime)
+}
+
+func (c *GoRuntimeClient) StatsSnapshot() (RuntimeStatsSnapshot, error) {
+	if !c.beginCall() {
+		return RuntimeStatsSnapshot{}, ErrClosed
+	}
+	defer c.endCall()
+	return c.bindings.getStats(c.runtime)
+}
+
+func (c *GoRuntimeClient) RuntimeInfoSnapshot() (RuntimeInfoSnapshot, error) {
+	if !c.beginCall() {
+		return RuntimeInfoSnapshot{}, ErrClosed
+	}
+	defer c.endCall()
+	return c.bindings.readRuntimeInfo()
+}
+
+func (c *GoRuntimeClient) RuntimeConfigSnapshot() (RuntimeConfigSnapshot, error) {
+	if !c.beginCall() {
+		return RuntimeConfigSnapshot{}, ErrClosed
+	}
+	defer c.endCall()
+	c.transportMu.Lock()
+	defer c.transportMu.Unlock()
+	return c.bindings.getConfig(c.runtime)
+}
+
+func (c *GoRuntimeClient) RuntimeStartupConfigSnapshot() (RuntimeStartupConfigSnapshot, error) {
+	if !c.beginCall() {
+		return RuntimeStartupConfigSnapshot{}, ErrClosed
+	}
+	defer c.endCall()
+	return c.bindings.getStartupConfig(c.runtime)
+}
+
+func (c *GoRuntimeClient) MonitorIsEnabled() (bool, error) {
+	startup, err := c.RuntimeStartupConfigSnapshot()
+	return startup.Monitor.Enabled, err
+}
+
+func (c *GoRuntimeClient) MonitorSnapshot(signalCount uint64) (MonitorSnapshot, error) {
+	if !c.beginCall() {
+		return MonitorSnapshot{}, ErrClosed
+	}
+	defer c.endCall()
 	health, err := c.bindings.getHealth(c.runtime)
 	if err != nil {
-		return RuntimeHealthSnapshot{}
+		return MonitorSnapshot{}, err
 	}
-	return health
-}
-
-func (c *GoRuntimeClient) StatsSnapshot() RuntimeStatsSnapshot {
 	stats, err := c.bindings.getStats(c.runtime)
 	if err != nil {
-		return RuntimeStatsSnapshot{}
+		return MonitorSnapshot{}, err
 	}
-	return stats
-}
-
-func (c *GoRuntimeClient) RuntimeInfoSnapshot() RuntimeInfoSnapshot {
-	info, err := c.bindings.readRuntimeInfo()
-	if err != nil {
-		return RuntimeInfoSnapshot{}
-	}
-	return info
-}
-
-func (c *GoRuntimeClient) RuntimeConfigSnapshot() RuntimeConfigSnapshot {
-	config, err := c.bindings.getConfig(c.runtime)
-	if err != nil {
-		return RuntimeConfigSnapshot{}
-	}
-	return config
-}
-
-func (c *GoRuntimeClient) MonitorIsEnabled() bool {
-	return c.hostHandles.MonitorReadFD >= 0
-}
-
-func (c *GoRuntimeClient) MonitorSnapshot(signalCount uint64) MonitorSnapshot {
-	return MonitorSnapshot{
-		SignalCount: signalCount,
-		Health:      c.HealthSnapshot(),
-		Stats:       c.StatsSnapshot(),
-	}
+	return MonitorSnapshot{SignalCount: signalCount, Health: health, Stats: stats}, nil
 }
 
 func (c *GoRuntimeClient) AwaitNextMonitor(timeout time.Duration) (*MonitorSnapshot, error) {
-	if !c.MonitorIsEnabled() {
-		return nil, fmt.Errorf("runtime monitor is not enabled")
+	enabled, err := c.MonitorIsEnabled()
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, &FeatureUnavailableError{Feature: "runtime monitor collection"}
 	}
 	if timeout <= 0 {
 		timeout = time.Second
@@ -621,10 +866,13 @@ func (c *GoRuntimeClient) AwaitNextMonitor(timeout time.Duration) (*MonitorSnaps
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
-	case <-c.closedCh:
-		return nil, fmt.Errorf("runtime client closed")
+	case <-c.lifetime.closed:
+		return nil, ErrClosed
 	case signalCount := <-c.monitorSignalCh:
-		snapshot := c.MonitorSnapshot(signalCount)
+		snapshot, err := c.MonitorSnapshot(signalCount)
+		if err != nil {
+			return nil, err
+		}
 		return &snapshot, nil
 	case <-timer.C:
 		return nil, nil
@@ -632,7 +880,11 @@ func (c *GoRuntimeClient) AwaitNextMonitor(timeout time.Duration) (*MonitorSnaps
 }
 
 func (c *GoRuntimeClient) AwaitAppliedGenerationAtLeast(generation uint64, timeout time.Duration) (*MonitorSnapshot, error) {
-	if current := c.MonitorSnapshot(0); current.Health.AppliedGeneration >= generation {
+	current, err := c.MonitorSnapshot(0)
+	if err != nil {
+		return nil, err
+	}
+	if current.Health.AppliedGeneration >= generation {
 		return &current, nil
 	}
 	deadline := time.Now().Add(timeout)
@@ -652,81 +904,102 @@ func (c *GoRuntimeClient) AwaitAppliedGenerationAtLeast(generation uint64, timeo
 	return nil, nil
 }
 
-func (c *GoRuntimeClient) RuntimeSnapshot() RuntimeSnapshot {
-	return RuntimeSnapshot{
-		RuntimeInfo:   c.RuntimeInfoSnapshot(),
-		RuntimeConfig: c.RuntimeConfigSnapshot(),
-		Connector: RuntimeConnectorSnapshot{
-			RuntimeClientStats:           c.SnapshotStats(),
-			SeparateDeliveredRequestLane: c.separateDeliveredRequestLane,
-			SystemName:                   c.config.SystemName,
-			NodeID:                       c.config.NodeID,
-		},
-		Health: c.HealthSnapshot(),
-		Stats:  c.StatsSnapshot(),
+// RuntimeSnapshot combines successive Core snapshots, not one atomic transaction.
+func (c *GoRuntimeClient) RuntimeSnapshot() (RuntimeSnapshot, error) {
+	if !c.beginCall() {
+		return RuntimeSnapshot{}, ErrClosed
 	}
+	defer c.endCall()
+	c.transportMu.Lock()
+	defer c.transportMu.Unlock()
+	info, err := c.bindings.readRuntimeInfo()
+	if err != nil {
+		return RuntimeSnapshot{}, err
+	}
+	startup, err := c.bindings.getStartupConfig(c.runtime)
+	if err != nil {
+		return RuntimeSnapshot{}, err
+	}
+	config, err := c.bindings.getConfig(c.runtime)
+	if err != nil {
+		return RuntimeSnapshot{}, err
+	}
+	health, err := c.bindings.getHealth(c.runtime)
+	if err != nil {
+		return RuntimeSnapshot{}, err
+	}
+	stats, err := c.bindings.getStats(c.runtime)
+	if err != nil {
+		return RuntimeSnapshot{}, err
+	}
+	network, err := c.bindings.getNetworkConfig(c.runtime)
+	if err != nil {
+		return RuntimeSnapshot{}, err
+	}
+	return RuntimeSnapshot{RuntimeInfo: info, StartupConfig: startup, RuntimeConfig: config, NetworkConfig: network,
+		Connector: RuntimeConnectorSnapshot{RuntimeClientStats: c.SnapshotStats(), SeparateDeliveredRequestLane: c.hostHandles.Flags&HostHandlesSeparateDeliveredLane != 0, SystemName: config.SystemName, NodeID: config.NodeID},
+		Health:    health, Stats: stats}, nil
 }
 
 func (c *GoRuntimeClient) Close() error {
-	var closeErr error
-	c.closeOnce.Do(func() {
-		close(c.closedCh)
-		c.pendingMu.Lock()
-		for key, pending := range c.pending {
-			pending.ch <- pendingResult{err: fmt.Errorf("runtime client closed")}
-			close(pending.ch)
-			delete(c.pending, key)
+	return c.lifetime.close(func() error {
+		c.handlersMu.RLock()
+		if c.handlerSchedule.queue != nil {
+			c.handlerSchedule.queue.stop()
 		}
-		c.pendingMu.Unlock()
-		c.trackedMu.Lock()
-		clear(c.trackedRequestsByMessageID)
-		clear(c.trackedRequestMessageIDsByCorrID)
-		c.trackedMu.Unlock()
+		c.handlersMu.RUnlock()
+		c.transportMu.Lock()
+		defer c.transportMu.Unlock()
+		return c.bindings.stopRuntime(c.runtime)
+	}, c.backgroundWG.Wait, func() {
+		c.bindings.destroyRequestReader(c.requestReader)
+		c.requestReader = nil
+		c.bindings.destroyAskClient(c.askClient)
+		c.askClient = nil
+		c.cleanupNative()
+		c.retireGoState()
 		c.terminalSubscribersMu.Lock()
-		for subscriberID, events := range c.terminalSubscribers {
-			delete(c.terminalSubscribers, subscriberID)
+		for id, events := range c.terminalSubscribers {
+			delete(c.terminalSubscribers, id)
 			close(events)
 		}
 		c.terminalSubscribersMu.Unlock()
 		c.deadletterSubscribersMu.Lock()
-		for subscriberID, events := range c.deadletterSubscribers {
-			delete(c.deadletterSubscribers, subscriberID)
+		for id, events := range c.deadletterSubscribers {
+			delete(c.deadletterSubscribers, id)
 			close(events)
 		}
 		c.deadletterSubscribersMu.Unlock()
-		c.wg.Wait()
-		c.transportMu.Lock()
-		closeErr = c.bindings.stopRuntime(c.runtime)
-		c.cleanupNative()
-		c.transportMu.Unlock()
 	})
-	return closeErr
 }
+
+// Called only after reader/handler and acquired-call drains. Release language
+// callback roots and queued value copies even when the app retains a closed host.
+func (c *GoRuntimeClient) retireGoState() {
+	c.handlersMu.Lock()
+	clear(c.handlers)
+	c.handlerTargetBytes = 0
+	c.handlersMu.Unlock()
+	c.handlerSchedule.queue = nil
+	c.lastDispatchTarget = nil
+	c.lastDispatchHandler = registeredHandler{}
+	c.lastDispatchHandlerSet = false
+	c.payloadMessagePrefix = nil
+	c.payloadEncodingMu.Lock()
+	c.payloadSources.Range(func(key, value any) bool { c.payloadSources.Delete(key); return true })
+	c.payloadTargets.Range(func(key, value any) bool { c.payloadTargets.Delete(key); return true })
+	c.payloadSourceCount, c.payloadTargetCount, c.payloadRetainedBytes = 0, 0, 0
+	c.payloadEncodingMu.Unlock()
+}
+
+func (c *GoRuntimeClient) beginCall() bool { return c.lifetime.acquire() }
+
+func (c *GoRuntimeClient) endCall() { c.lifetime.release() }
 
 func (c *GoRuntimeClient) cleanupNative() {
-	for _, fd := range []int{
-		c.hostHandles.ResponseReadFD,
-		c.hostHandles.DeadletterReadFD,
-		c.hostHandles.RequestWriteFD,
-		c.hostHandles.ControlWriteFD,
-		c.hostHandles.MonitorReadFD,
-		c.hostHandles.DeliveredRequestReadFD,
-	} {
-		safeCloseFD(fd)
-	}
+	c.bindings.closeHostHandles(c.hostHandles)
 	c.bindings.destroyRuntime(c.runtime)
 	c.bindings.close()
-}
-
-func (c *GoRuntimeClient) hostHandleFlags() uint32 {
-	var flags uint32
-	if c.config.EnableMonitor {
-		flags |= HostHandlesEnableMonitor
-	}
-	if c.config.SeparateDeliveredRequestLane {
-		flags |= HostHandlesSeparateDeliveredLane
-	}
-	return flags
 }
 
 func (c *GoRuntimeClient) buildControlEnvelopeBytes(
@@ -736,175 +1009,237 @@ func (c *GoRuntimeClient) buildControlEnvelopeBytes(
 	seq uint64,
 	overloadPolicy *RuntimeOverloadPolicy,
 ) ([]byte, error) {
-	if generation == 0 {
-		generation = c.config.Generation
-	}
-	if seq == 0 {
-		seq = 1
-	}
-	if routes == nil {
-		routes = c.config.Routes
-	}
-	if sourceConnector == "" {
-		sourceConnector = c.config.SystemName
-	}
-	return encodeRouteSnapshotControl(generation, routes, sourceConnector, seq, overloadPolicy)
+	// This is a full new caller snapshot, not a replay/default table retained
+	// from construction. Core validates generation and routes; seq is diagnostic.
+	return c.bindings.encodeRouteSnapshotControl(generation, routes, sourceConnector, seq, overloadPolicy)
 }
 
-func (c *GoRuntimeClient) submitPendingRequest(request *Envelope, timeout time.Duration, submit func(*Envelope) error) (*Envelope, error) {
-	if timeout <= 0 {
-		timeout = 5 * time.Second
+func (c *GoRuntimeClient) submitPendingRequest(request *Envelope, timeout time.Duration) (*Envelope, error) {
+	if !c.beginCall() {
+		return nil, ErrClosed
 	}
-	normalized, tracked, err := c.trackRequest(request, "request")
+	defer c.endCall()
+	timeoutMillis, err := coreTimeoutMillis(timeout)
 	if err != nil {
 		return nil, err
 	}
-	waiter := &pendingRequest{ch: make(chan pendingResult, 1)}
-	c.pendingMu.Lock()
-	if _, exists := c.pending[tracked.messageID]; exists {
-		c.pendingMu.Unlock()
-		c.forgetTrackedRequest(tracked.messageID)
-		return nil, fmt.Errorf("duplicate pending messageId=%s", tracked.messageID)
-	}
-	c.pending[tracked.messageID] = waiter
-	c.pendingMu.Unlock()
-
-	if err := submit(normalized); err != nil {
-		c.pendingMu.Lock()
-		delete(c.pending, tracked.messageID)
-		c.pendingMu.Unlock()
-		c.forgetTrackedRequest(tracked.messageID)
+	frame, err := c.bindings.encodeEnvelope(request)
+	if err != nil {
 		return nil, err
 	}
+	if c.isClosed() {
+		return nil, ErrClosed
+	}
+	ticket, err := c.bindings.beginAsk(c.askClient, frame)
+	if err != nil {
+		return nil, err
+	}
+	defer c.bindings.destroyAskTicket(ticket)
+	c.counters.corePending.Add(1)
+	defer func() {
+		c.counters.corePending.Add(-1)
+	}()
 
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case result := <-waiter.ch:
-		return result.response, result.err
-	case <-timer.C:
-		c.pendingMu.Lock()
-		delete(c.pending, tracked.messageID)
-		c.pendingMu.Unlock()
-		c.forgetTrackedRequest(tracked.messageID)
-		select {
-		case result := <-waiter.ch:
-			return result.response, result.err
-		default:
+	kind, resultFrame, status, err := c.bindings.awaitAsk(ticket, timeoutMillis)
+	if err != nil {
+		return nil, err
+	}
+	if status == COAKKAErrWouldBlock {
+		return nil, nativeStatusError("ask_ticket_await", status)
+	}
+	if status == COAKKAErrClosed {
+		return nil, nativeStatusError("ask_ticket_await", status)
+	}
+	switch kind {
+	case nativeClientResultResponse:
+		response, decodeErr := c.bindings.decodeEnvelope(resultFrame)
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
-		return nil, fmt.Errorf("timed out waiting for %s", tracked.messageID)
-	case <-c.closedCh:
-		return nil, fmt.Errorf("runtime client closed")
+		c.counters.matchedResponses.Add(1)
+		c.publishTerminalEvent(RequestTerminalEvent{
+			Kind:             RequestTerminalEventResponse,
+			RequestMessageID: response.GetCorrelationId(),
+			CorrelationID:    response.GetCorrelationId(),
+			Response:         response,
+		})
+		return response, nil
+	case nativeClientResultDeadletter:
+		deadletter, decodeErr := c.bindings.decodeDeadletter(resultFrame)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		c.counters.matchedDeadletters.Add(1)
+		c.publishDeadletterObservation(deadletter)
+		c.publishTerminalEvent(RequestTerminalEvent{
+			Kind:             RequestTerminalEventDeadletter,
+			RequestMessageID: deadletter.GetOriginalEnvelope().GetMessageId(),
+			CorrelationID:    deadletter.GetOriginalEnvelope().GetCorrelationId(),
+			Deadletter:       deadletter,
+		})
+		return nil, &DeadletterError{Deadletter: deadletter}
+	default:
+		return nil, fmt.Errorf("Core returned unknown ask result kind=%d", kind)
 	}
 }
 
-func (c *GoRuntimeClient) submitTrackedRequest(request *Envelope, submit func(*Envelope) error) (*SubmittedRequest, error) {
-	normalized, tracked, err := c.trackRequest(request, "submitRequest")
+func coreTimeoutMillis(timeout time.Duration) (uint32, error) {
+	if timeout <= 0 {
+		return 0, fmt.Errorf("timeout must be positive")
+	}
+	milliseconds := timeout / time.Millisecond
+	if timeout%time.Millisecond != 0 {
+		milliseconds++
+	}
+	if milliseconds > time.Duration(^uint32(0)) {
+		return 0, fmt.Errorf("timeout exceeds Core uint32 millisecond range")
+	}
+	return uint32(milliseconds), nil
+}
+
+// Envelope timeout zero stays unspecified. A positive sub-millisecond value
+// rounds up; negative or out-of-range intent must never wrap the int32 wire.
+func envelopeTimeoutMillis(timeout time.Duration) (int32, error) {
+	if timeout == 0 {
+		return 0, nil
+	}
+	milliseconds, err := coreTimeoutMillis(timeout)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	if err := submit(normalized); err != nil {
-		c.forgetTrackedRequest(tracked.messageID)
-		return nil, err
+	if milliseconds > 2147483647 {
+		return 0, fmt.Errorf("envelope timeout cannot cross the int32 millisecond boundary")
 	}
-	return &SubmittedRequest{
-		MessageID:     tracked.messageID,
-		CorrelationID: tracked.correlationID,
-	}, nil
+	return int32(milliseconds), nil
 }
 
-func (c *GoRuntimeClient) startEnvelopeReader(fd int, lane string, onFrame func([]byte) error) {
-	if fd < 0 {
-		return
+func (c *GoRuntimeClient) submitTicketRequest(request *Envelope) (*SubmittedRequest, error) {
+	if !c.beginCall() {
+		return nil, ErrClosed
 	}
-	c.wg.Add(1)
+	frame, err := c.bindings.encodeEnvelope(request)
+	if err != nil {
+		c.endCall()
+		return nil, err
+	}
+	messageID := request.GetMessageId()
+	ticket, err := c.bindings.beginAsk(c.askClient, frame)
+	if err != nil {
+		c.endCall()
+		return nil, err
+	}
+	c.counters.corePending.Add(1)
 	go func() {
-		defer c.wg.Done()
-		buffer := make([]byte, 0, 64*1024)
-		chunk := make([]byte, 64*1024)
+		defer c.endCall()
+		defer c.counters.corePending.Add(-1)
+		defer c.bindings.destroyAskTicket(ticket)
 		for {
 			select {
-			case <-c.closedCh:
+			case <-c.lifetime.closed:
+				c.bindings.cancelAsk(ticket)
 				return
 			default:
 			}
-			ready, err := waitReadable(fd, 100*time.Millisecond)
+			kind, resultFrame, status, awaitErr := c.bindings.awaitAsk(ticket, 100)
+			if awaitErr != nil {
+				if !c.isClosed() {
+					log.Printf("[coakka-go] Core ask failed: %v", awaitErr)
+				}
+				return
+			}
+			if status == COAKKAErrWouldBlock {
+				continue
+			}
+			if status == COAKKAErrClosed {
+				return
+			}
+			switch kind {
+			case nativeClientResultResponse:
+				response, err := c.bindings.decodeEnvelope(resultFrame)
+				if err == nil {
+					c.observeCoreResponse(response)
+				}
+			case nativeClientResultDeadletter:
+				deadletter, err := c.bindings.decodeDeadletter(resultFrame)
+				if err == nil {
+					c.observeCoreDeadletter(deadletter)
+				}
+			}
+			return
+		}
+	}()
+	return &SubmittedRequest{MessageID: messageID}, nil
+}
+
+func (c *GoRuntimeClient) startRequestReader() {
+	c.backgroundWG.Add(1)
+	go func() {
+		defer c.backgroundWG.Done()
+		staging := make([]byte, 64*1024)
+		for {
+			select {
+			case <-c.lifetime.closed:
+				return
+			default:
+			}
+			request, status, err := c.bindings.readDeliveredRequest(c.requestReader, 100, staging)
 			if err != nil {
 				if !c.isClosed() {
-					log.Printf("[coakka-go] %s reader poll failed: %v", lane, err)
+					log.Printf("[coakka-go] Core request reader failed: %v", err)
 				}
+				return
+			}
+			if status == COAKKAErrWouldBlock {
 				continue
 			}
-			if !ready {
-				continue
+			if status == COAKKAErrClosed {
+				return
 			}
-			for {
-				n, readErr := nativeReadFD(fd, chunk)
-				if n > 0 {
-					buffer = append(buffer, chunk[:n]...)
-					for {
-						if len(buffer) < 8 {
-							break
-						}
-						frameLength := binary.LittleEndian.Uint64(buffer[:8])
-						if frameLength > uint64(len(buffer)-8) {
-							break
-						}
-						frameSize := int(frameLength)
-						frame := append([]byte(nil), buffer[8:8+frameSize]...)
-						buffer = buffer[8+frameSize:]
-						if err := onFrame(frame); err != nil && !c.isClosed() {
-							log.Printf("[coakka-go] %s frame handler failed: %v", lane, err)
-						}
-					}
-				}
-				if readErr == nil {
-					if n < len(chunk) {
-						break
-					}
-					continue
-				}
-				if isRetryableReadError(readErr) {
-					break
-				}
-				if isTerminalReadError(readErr) {
-					return
-				}
-				if !c.isClosed() {
-					log.Printf("[coakka-go] %s reader failed: %v", lane, readErr)
-				}
-				break
-			}
+			c.dispatchDeliveredRequest(request)
 		}
 	}()
 }
 
+func (c *GoRuntimeClient) startHandlerWorkers(queue *handlerDispatchQueue, count int) {
+	for worker := 0; worker < count; worker++ {
+		c.backgroundWG.Add(1)
+		go func() {
+			defer c.backgroundWG.Done()
+			for {
+				select {
+				case <-c.lifetime.closed:
+					return
+				case job := <-queue.jobs:
+					c.handleDeliveredRequest(job)
+					queue.release(job)
+				}
+			}
+		}()
+	}
+}
+
 func (c *GoRuntimeClient) startMonitorReader(fd int) {
-	c.wg.Add(1)
+	c.backgroundWG.Add(1)
 	go func() {
-		defer c.wg.Done()
+		defer c.backgroundWG.Done()
 		for {
 			select {
-			case <-c.closedCh:
+			case <-c.lifetime.closed:
 				return
 			default:
 			}
-			ready, err := waitReadable(fd, 100*time.Millisecond)
+			signalCount, status, err := c.bindings.monitorWaitConsume(fd, 100)
 			if err != nil {
 				if !c.isClosed() {
-					log.Printf("[coakka-go] monitor reader poll failed: %v", err)
+					log.Printf("[coakka-go] Core monitor wait failed: %v", err)
 				}
+				return
+			}
+			if status == COAKKAErrWouldBlock {
 				continue
 			}
-			if !ready {
-				continue
-			}
-			signalCount, err := c.bindings.monitorConsume(fd)
-			if err != nil {
-				if !c.isClosed() {
-					log.Printf("[coakka-go] monitor reader failed: %v", err)
-				}
-				continue
+			if status == COAKKAErrClosed {
+				return
 			}
 			select {
 			case c.monitorSignalCh <- signalCount:
@@ -919,252 +1254,165 @@ func (c *GoRuntimeClient) startMonitorReader(fd int) {
 	}()
 }
 
-func (c *GoRuntimeClient) onRequestFrame(frame []byte) error {
-	envelope, err := decodeEnvelope(frame)
-	if err != nil {
-		return err
+func (c *GoRuntimeClient) dispatchDeliveredRequest(request nativeDeliveredRequest) {
+	c.counters.deliveredRequests.Add(1)
+	registered, ok := c.deliveredHandler(request.Target)
+	if !ok {
+		return
 	}
-	if c.separateDeliveredRequestLane {
-		if envelope.GetKind() != MessageKindRequest {
-			return fmt.Errorf("unexpected envelope kind=%d on delivered-request lane", envelope.GetKind())
-		}
-		c.dispatchRequest(envelope)
-		return nil
+	if registered.payloadHandler != nil {
+		c.handlePayloadDeliveredRequest(request, registered)
+		return
 	}
-	switch envelope.GetKind() {
-	case MessageKindRequest:
-		c.dispatchRequest(envelope)
-	case MessageKindResponse:
-		c.dispatchResponse(envelope)
-	default:
-		return fmt.Errorf("unexpected envelope kind=%d", envelope.GetKind())
-	}
-	return nil
+	// Typed registration publishes its queue before the immutable handler.
+	// The sole reader's cache preserves that handoff on later exact hits.
+	c.enqueueTypedDeliveredRequest(request, registered)
 }
 
-func (c *GoRuntimeClient) onResponseFrame(frame []byte) error {
-	envelope, err := decodeEnvelope(frame)
-	if err != nil {
-		return err
-	}
-	switch envelope.GetKind() {
-	case MessageKindResponse:
-		c.dispatchResponse(envelope)
-	case MessageKindRequest:
-		return fmt.Errorf("unexpected request on response-only lane")
-	default:
-		return fmt.Errorf("unexpected envelope kind=%d", envelope.GetKind())
-	}
-	return nil
+// Only the asynchronous typed path needs a heap-owned record. Keep this
+// boxing behind the branch so raw synchronous turns retain their Go stack value.
+func (c *GoRuntimeClient) enqueueTypedDeliveredRequest(request nativeDeliveredRequest, registered registeredHandler) {
+	c.handlerSchedule.queue.enqueue(deliveredRequestJob{request: &request, registered: registered}, c.lifetime.closed)
 }
 
-func (c *GoRuntimeClient) onDeadletterFrame(frame []byte) error {
-	deadletter, err := decodeDeadletter(frame)
-	if err != nil {
-		return err
+func (c *GoRuntimeClient) deliveredHandler(target []byte) (registeredHandler, bool) {
+	if c.lastDispatchHandlerSet && bytes.Equal(c.lastDispatchTarget, target) {
+		return c.lastDispatchHandler, true
 	}
-	c.dispatchDeadletter(deadletter)
-	return nil
-}
-
-func (c *GoRuntimeClient) dispatchRequest(request *Envelope) {
-	c.statsMu.Lock()
-	c.stats.DeliveredRequests++
-	c.statsMu.Unlock()
-
 	c.handlersMu.RLock()
-	registered, ok := c.handlers[request.GetTarget()]
+	registered, ok := c.handlers[string(target)]
 	c.handlersMu.RUnlock()
 	if !ok {
-		return
+		return registeredHandler{}, false
 	}
-	go func() {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				log.Printf("[coakka-go] request handler panic target=%s err=%v", request.GetTarget(), recovered)
-			}
-		}()
-		reply := registered.handler(request)
-		if request.GetOneWay() || reply == nil {
-			return
-		}
-		var err error
-		if registered.typedReplies {
-			err = c.SubmitTypedEnvelope(reply)
-		} else {
-			err = c.SubmitRawEnvelope(reply)
-		}
-		if err != nil {
-			log.Printf("[coakka-go] request handler reply submit failed target=%s err=%v", request.GetTarget(), err)
+	// The sole reader owns this exact-byte cache. Registrations cannot be
+	// removed or replaced, so a byte-equal Core-issued target keeps its owner.
+	c.lastDispatchTarget = append(c.lastDispatchTarget[:0], target...)
+	c.lastDispatchHandler = registered
+	c.lastDispatchHandlerSet = true
+	return registered, true
+}
+
+func (c *GoRuntimeClient) handlePayloadDeliveredRequest(request nativeDeliveredRequest, registered registeredHandler) {
+	defer func() {
+		if recover() != nil {
+			log.Printf("[coakka-go] application handler panicked; no reply submitted")
 		}
 	}()
-}
-
-func (c *GoRuntimeClient) dispatchResponse(response *Envelope) {
-	tracked, ok := c.forgetTrackedRequestByCorrelationID(response.GetCorrelationId())
-	if !ok {
-		c.statsMu.Lock()
-		c.stats.LateResponses++
-		c.statsMu.Unlock()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("[coakka-go] payload handler panic target=%s err=%v", request.Target, recovered)
+		}
+	}()
+	replyPayload := registered.payloadHandler(request.Payload)
+	if request.OneWay || replyPayload == nil {
 		return
 	}
-	c.publishTerminalEvent(RequestTerminalEvent{
-		Kind:             RequestTerminalEventResponse,
-		RequestMessageID: tracked.messageID,
-		CorrelationID:    tracked.correlationID,
-		Response:         response,
-	})
-	c.pendingMu.Lock()
-	pending, ok := c.pending[tracked.messageID]
-	if ok {
-		delete(c.pending, tracked.messageID)
+	err := c.bindings.submitRawReplyCString(c.runtime, request.Frame, request.TargetCString, replyPayload)
+	if err != nil && !c.isClosed() {
+		log.Printf("[coakka-go] payload reply submit failed target=%s err=%v", request.Target, err)
 	}
-	c.pendingMu.Unlock()
-	c.statsMu.Lock()
-	c.stats.MatchedResponses++
-	c.statsMu.Unlock()
-	if ok {
-		pending.ch <- pendingResult{response: response}
-		close(pending.ch)
+	return
+}
+
+func (c *GoRuntimeClient) handleDeliveredRequest(job deliveredRequestJob) {
+	defer func() {
+		if recover() != nil {
+			log.Printf("[coakka-go] application handler panicked; no reply submitted")
+		}
+	}()
+	request := job.request
+	registered := job.registered
+
+	envelope, err := c.bindings.decodeEnvelope(request.Frame)
+	if err != nil {
+		if !c.isClosed() {
+			log.Printf("[coakka-go] request value projection failed: %v", err)
+		}
+		return
+	}
+	// Routing and reply semantics use Core-issued dispatch facts. The decoder
+	// fills only the remaining language value fields.
+	envelope.Kind = MessageKindRequest
+	envelope.Target = string(request.Target)
+	envelope.Payload = request.Payload
+	envelope.OneWay = request.OneWay
+	c.handleRegisteredRequest(envelope, request.Frame, registered)
+}
+
+func (c *GoRuntimeClient) handleRegisteredRequest(request *Envelope, requestFrame []byte, registered registeredHandler) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("[coakka-go] request handler panic target=%s err=%v", request.GetTarget(), recovered)
+		}
+	}()
+	reply := registered.handler(request)
+	if request.GetOneWay() || reply == nil {
+		return
+	}
+	var err error
+	if registered.typedReplies || len(requestFrame) == 0 {
+		err = c.SubmitTypedEnvelope(reply)
+	} else {
+		err = c.bindings.submitRawReply(c.runtime, requestFrame, reply.GetSource(), reply.GetPayload())
+	}
+	if err != nil && !c.isClosed() {
+		log.Printf("[coakka-go] request handler reply submit failed target=%s err=%v", request.GetTarget(), err)
 	}
 }
 
-func (c *GoRuntimeClient) dispatchDeadletter(deadletter *Deadletter) {
-	if deadletter == nil || deadletter.OriginalEnvelope == nil {
-		return
-	}
-	tracked, ok := c.forgetTrackedRequest(deadletter.OriginalEnvelope.GetMessageId())
-	c.publishDeadletterObservation(deadletter, tracked, ok)
-	if !ok {
-		c.statsMu.Lock()
-		c.stats.UnhandledDeadletters++
-		c.statsMu.Unlock()
-		return
-	}
-	c.publishTerminalEvent(RequestTerminalEvent{
-		Kind:             RequestTerminalEventDeadletter,
-		RequestMessageID: tracked.messageID,
-		CorrelationID:    tracked.correlationID,
-		Deadletter:       deadletter,
-	})
-	c.pendingMu.Lock()
-	pending, waiterExists := c.pending[tracked.messageID]
-	if waiterExists {
-		delete(c.pending, tracked.messageID)
-	}
-	c.pendingMu.Unlock()
-	c.statsMu.Lock()
-	c.stats.MatchedDeadletters++
-	c.statsMu.Unlock()
-	if waiterExists {
-		pending.ch <- pendingResult{err: &DeadletterError{Deadletter: deadletter}}
-		close(pending.ch)
-	}
+func (c *GoRuntimeClient) observeCoreResponse(response *Envelope) {
+	// This frame belongs to the completed Core ticket; never match it again.
+	c.counters.matchedResponses.Add(1)
+	c.publishTerminalEvent(RequestTerminalEvent{Kind: RequestTerminalEventResponse,
+		RequestMessageID: response.GetCorrelationId(), CorrelationID: response.GetCorrelationId(), Response: response})
 }
 
-func (c *GoRuntimeClient) publishDeadletterObservation(deadletter *Deadletter, tracked trackedRequest, matched bool) {
-	observed := ObservedDeadletter{
-		Deadletter:            deadletter,
-		MatchedPendingRequest: matched,
+func (c *GoRuntimeClient) observeCoreDeadletter(deadletter *Deadletter) {
+	if deadletter == nil {
+		return
 	}
-	if matched {
-		observed.RequestMessageID = tracked.messageID
-		observed.CorrelationID = tracked.correlationID
-	} else if deadletter != nil && deadletter.OriginalEnvelope != nil {
-		observed.RequestMessageID = deadletter.OriginalEnvelope.GetMessageId()
-		observed.CorrelationID = deadletter.OriginalEnvelope.GetCorrelationId()
-	}
+	c.counters.matchedDeadletters.Add(1)
+	c.publishDeadletterObservation(deadletter)
+	original := deadletter.GetOriginalEnvelope()
+	c.publishTerminalEvent(RequestTerminalEvent{Kind: RequestTerminalEventDeadletter,
+		RequestMessageID: original.GetMessageId(), CorrelationID: original.GetCorrelationId(), Deadletter: deadletter})
+}
 
+func (c *GoRuntimeClient) publishDeadletterObservation(deadletter *Deadletter) {
+	original := deadletter.GetOriginalEnvelope()
+	observed := ObservedDeadletter{Deadletter: deadletter, MatchedPendingRequest: true,
+		RequestMessageID: original.GetMessageId(), CorrelationID: original.GetCorrelationId()}
 	c.deadletterSubscribersMu.Lock()
 	defer c.deadletterSubscribersMu.Unlock()
 	for _, events := range c.deadletterSubscribers {
 		select {
 		case events <- observed:
 		default:
-			c.statsMu.Lock()
-			c.stats.DeadletterObservationDropCount++
-			c.statsMu.Unlock()
+			c.counters.deadletterObservationDrops.Add(1)
 		}
 	}
 }
 
 func (c *GoRuntimeClient) isClosed() bool {
 	select {
-	case <-c.closedCh:
+	case <-c.lifetime.closed:
 		return true
 	default:
 		return false
 	}
 }
 
-func (c *GoRuntimeClient) trackRequest(request *Envelope, caller string) (*Envelope, trackedRequest, error) {
-	if request.GetKind() != MessageKindRequest {
-		return nil, trackedRequest{}, fmt.Errorf("%s requires MESSAGE_KIND_REQUEST", caller)
-	}
-	if request.GetOneWay() {
-		return nil, trackedRequest{}, fmt.Errorf("%s requires oneWay=false", caller)
-	}
-	if request.GetMessageId() == "" {
-		return nil, trackedRequest{}, fmt.Errorf("%s requires messageId", caller)
-	}
-	normalized := cloneEnvelope(request)
-	if normalized.CorrelationId == "" {
-		normalized.CorrelationId = normalized.MessageId
-	}
-	tracked := trackedRequest{
-		messageID:     normalized.GetMessageId(),
-		correlationID: normalized.GetCorrelationId(),
-	}
-
-	c.trackedMu.Lock()
-	defer c.trackedMu.Unlock()
-	if _, exists := c.trackedRequestsByMessageID[tracked.messageID]; exists {
-		return nil, trackedRequest{}, fmt.Errorf("duplicate tracked messageId=%s", tracked.messageID)
-	}
-	if existingMessageID, exists := c.trackedRequestMessageIDsByCorrID[tracked.correlationID]; exists {
-		return nil, trackedRequest{}, fmt.Errorf("duplicate tracked correlationId=%s existingMessageId=%s", tracked.correlationID, existingMessageID)
-	}
-	c.trackedRequestsByMessageID[tracked.messageID] = tracked
-	c.trackedRequestMessageIDsByCorrID[tracked.correlationID] = tracked.messageID
-	return normalized, tracked, nil
-}
-
-func (c *GoRuntimeClient) forgetTrackedRequest(messageID string) (trackedRequest, bool) {
-	c.trackedMu.Lock()
-	defer c.trackedMu.Unlock()
-	tracked, ok := c.trackedRequestsByMessageID[messageID]
-	if !ok {
-		return trackedRequest{}, false
-	}
-	delete(c.trackedRequestsByMessageID, messageID)
-	delete(c.trackedRequestMessageIDsByCorrID, tracked.correlationID)
-	return tracked, true
-}
-
-func (c *GoRuntimeClient) forgetTrackedRequestByCorrelationID(correlationID string) (trackedRequest, bool) {
-	c.trackedMu.Lock()
-	defer c.trackedMu.Unlock()
-	messageID, ok := c.trackedRequestMessageIDsByCorrID[correlationID]
-	if !ok {
-		return trackedRequest{}, false
-	}
-	tracked, trackedExists := c.trackedRequestsByMessageID[messageID]
-	if !trackedExists {
-		delete(c.trackedRequestMessageIDsByCorrID, correlationID)
-		return trackedRequest{}, false
-	}
-	delete(c.trackedRequestMessageIDsByCorrID, correlationID)
-	delete(c.trackedRequestsByMessageID, messageID)
-	return tracked, true
-}
-
-func (c *GoRuntimeClient) addTerminalSubscriber(events chan RequestTerminalEvent) uint64 {
+func (c *GoRuntimeClient) addTerminalSubscriber(events chan RequestTerminalEvent) (uint64, error) {
 	c.terminalSubscribersMu.Lock()
 	defer c.terminalSubscribersMu.Unlock()
+	if len(c.terminalSubscribers) >= observerCapacity {
+		return 0, fmt.Errorf("Go terminal observer capacity exhausted")
+	}
 	c.nextTerminalSubscriberID++
 	subscriberID := c.nextTerminalSubscriberID
 	c.terminalSubscribers[subscriberID] = events
-	return subscriberID
+	return subscriberID, nil
 }
 
 func (c *GoRuntimeClient) removeTerminalSubscriber(subscriberID uint64, events chan RequestTerminalEvent) {
@@ -1178,13 +1426,16 @@ func (c *GoRuntimeClient) removeTerminalSubscriber(subscriberID uint64, events c
 	close(events)
 }
 
-func (c *GoRuntimeClient) addDeadletterSubscriber(events chan ObservedDeadletter) uint64 {
+func (c *GoRuntimeClient) addDeadletterSubscriber(events chan ObservedDeadletter) (uint64, error) {
 	c.deadletterSubscribersMu.Lock()
 	defer c.deadletterSubscribersMu.Unlock()
+	if len(c.deadletterSubscribers) >= observerCapacity {
+		return 0, fmt.Errorf("Go deadletter observer capacity exhausted")
+	}
 	c.nextDeadletterSubscriberID++
 	subscriberID := c.nextDeadletterSubscriberID
 	c.deadletterSubscribers[subscriberID] = events
-	return subscriberID
+	return subscriberID, nil
 }
 
 func (c *GoRuntimeClient) removeDeadletterSubscriber(subscriberID uint64, events chan ObservedDeadletter) {
@@ -1205,9 +1456,7 @@ func (c *GoRuntimeClient) publishTerminalEvent(event RequestTerminalEvent) {
 		select {
 		case events <- event:
 		default:
-			c.statsMu.Lock()
-			c.stats.TerminalEventDropCount++
-			c.statsMu.Unlock()
+			c.counters.terminalEventDrops.Add(1)
 		}
 	}
 }

@@ -2,9 +2,6 @@ package coakka_v2_connector
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 )
 
 func RuntimePlatformID(goos string, goarch string) string {
@@ -47,24 +44,4 @@ func runtimeResourceFileNames(goos string) []string {
 	default:
 		panic("unsupported platform")
 	}
-}
-
-func resolvePackagedRuntimeNative() (string, bool) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", false
-	}
-	packageDir := filepath.Dir(sourceFile)
-	platform := RuntimePlatformID(runtime.GOOS, runtime.GOARCH)
-	for _, fileName := range runtimeResourceFileNames(runtime.GOOS) {
-		candidate := filepath.Join(packageDir, "native", platform, fileName)
-		if _, err := os.Stat(candidate); err == nil {
-			abs, absErr := filepath.Abs(candidate)
-			if absErr == nil {
-				return abs, true
-			}
-			return candidate, true
-		}
-	}
-	return "", false
 }

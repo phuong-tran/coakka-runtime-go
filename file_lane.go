@@ -105,23 +105,16 @@ type FileLaneConfig struct {
 func DefaultFileLaneConfig() FileLaneConfig {
 	return FileLaneConfig{Flags: FileLaneSender | FileLaneReceiver, BindHost: "127.0.0.1"}
 }
-func (c FileLaneConfig) normalized() FileLaneConfig {
-	if c.Flags == 0 {
-		c.Flags = FileLaneSender | FileLaneReceiver
+
+func (c FileLaneConfig) validateRepresentation() error {
+	if err := validateNativeText([2]string{"bind host", c.BindHost}); err != nil {
+		return err
 	}
-	if c.BindHost == "" {
-		c.BindHost = "127.0.0.1"
+	if c.Security == nil {
+		return nil
 	}
-	return c
-}
-func (c FileLaneConfig) validate() error {
-	if c.Flags & ^uint32(FileLaneSender|FileLaneReceiver) != 0 || c.Flags == 0 {
-		return errors.New("file lane requires valid sender or receiver flags")
-	}
-	if c.SenderWorkerCount > 4 || c.ReceiverWorkerCount > 4 {
-		return errors.New("file lane worker counts must be in [0, 4]")
-	}
-	return nil
+	s := c.Security
+	return validateNativeText([2]string{"credential ID", s.CredentialID}, [2]string{"CA path", s.CACertificateFile}, [2]string{"identity path", s.IdentityCertificateFile}, [2]string{"key path", s.PrivateKeyFile})
 }
 
 // FileReceiveSpec authorizes one destination and exact content identity.
@@ -186,12 +179,12 @@ type FileTransferSnapshot struct {
 	Detail                                                                        string
 }
 
-// Terminal reports whether this side has reached a terminal state.
-func (s FileTransferSnapshot) Terminal() bool { return s.State >= FileTransferCompleted }
+// Terminal projects Core's transition marker, not enum ordering. PAUSED is resumable, not terminal.
+func (s FileTransferSnapshot) Terminal() bool { return s.TerminalMonoNS != 0 }
 
 // Succeeded reports COMPLETED plus OK for this side of the transfer.
 func (s FileTransferSnapshot) Succeeded() bool {
-	return s.State == FileTransferCompleted && s.Result == FileResultOK
+	return s.Terminal() && s.State == FileTransferCompleted && s.Result == FileResultOK
 }
 
 // FileLaneStats contains bounded queue, active-work, terminal, and byte counters.
@@ -220,18 +213,11 @@ func OpenFileLane(config FileLaneConfig, runtimeLibPath string) (*FileLane, erro
 
 // OpenOwnedFileLane starts a lane that can issue replica-pinned receive grants.
 func OpenOwnedFileLane(config FileLaneConfig, owner LaneOwnerConfig, runtimeLibPath string) (*FileLane, error) {
-	if err := owner.validate(); err != nil {
-		return nil, err
-	}
 	return openFileLane(config, owner, runtimeLibPath, true)
 }
 
 func openFileLane(config FileLaneConfig, owner LaneOwnerConfig, runtimeLibPath string, owned bool) (*FileLane, error) {
-	config = config.normalized()
-	if err := config.validate(); err != nil {
-		return nil, err
-	}
-	path, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath, nil)
+	path, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath)
 	if err != nil {
 		return nil, err
 	}
@@ -239,9 +225,9 @@ func openFileLane(config FileLaneConfig, owner LaneOwnerConfig, runtimeLibPath s
 	if err != nil {
 		return nil, err
 	}
-	if !bindings.fileLaneAvailable() {
+	if err := bindings.requireCoreFeature(runtimeFeatureFileLane, "File Lane"); err != nil {
 		bindings.close()
-		return nil, errors.New("native runtime does not export file-lane ABI; install the next runtime native release")
+		return nil, err
 	}
 	var lane nativeFileLane
 	if owned {
@@ -269,7 +255,7 @@ func openFileLane(config FileLaneConfig, owner LaneOwnerConfig, runtimeLibPath s
 
 // FileSHA256 computes the exact source identity using the native implementation.
 func FileSHA256(path, runtimeLibPath string) (FileDigest, error) {
-	resolved, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath, nil)
+	resolved, err := (RuntimeLibraryResolver{}).Resolve(runtimeLibPath)
 	if err != nil {
 		return FileDigest{}, err
 	}
@@ -278,8 +264,8 @@ func FileSHA256(path, runtimeLibPath string) (FileDigest, error) {
 		return FileDigest{}, err
 	}
 	defer bindings.close()
-	if !bindings.fileLaneAvailable() {
-		return FileDigest{}, errors.New("native runtime does not export file-lane ABI")
+	if err := bindings.requireCoreFeature(runtimeFeatureFileLane, "File Lane"); err != nil {
+		return FileDigest{}, err
 	}
 	return bindings.fileSHA256(path)
 }
@@ -336,9 +322,6 @@ func (l *FileLane) PrepareReceiveGrant(spec FileReceiveSpec) (FileReceiveGrant, 
 
 // SubmitSend queues a send after the remote application prepares the receive.
 func (l *FileLane) SubmitSend(spec FileSendSpec) error {
-	if spec.RemotePort == 0 {
-		return errors.New("remote port must be in [1, 65535]")
-	}
 	lane, err := l.acquire()
 	if err != nil {
 		return err
@@ -406,17 +389,26 @@ func (l *FileLane) Close() error {
 		return nil
 	}
 	if l.closing {
-		for l.lane != nil {
+		for l.closing && l.lane != nil {
 			l.drained.Wait()
 		}
-		l.mu.Unlock()
-		return nil
+		if l.lane == nil {
+			l.mu.Unlock()
+			return nil
+		}
 	}
 	l.closing = true
 	lane := l.lane
 	l.mu.Unlock()
 	status := l.bindings.stopFileLane(lane)
 	l.mu.Lock()
+	if status != 0 {
+		// Preserve the native owner when Core has not confirmed worker join.
+		l.closing = false
+		l.drained.Broadcast()
+		l.mu.Unlock()
+		return nativeStatusError("file_lane_stop", status)
+	}
 	for l.active != 0 {
 		l.drained.Wait()
 	}
@@ -425,8 +417,5 @@ func (l *FileLane) Close() error {
 	l.lane = nil
 	l.drained.Broadcast()
 	l.mu.Unlock()
-	if status != 0 && status != -7 {
-		return fmt.Errorf("file_lane_stop failed: native status %d", status)
-	}
 	return nil
 }

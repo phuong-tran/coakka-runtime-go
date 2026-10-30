@@ -278,12 +278,25 @@ func (e *Envelope) GetPayloadFormat() PayloadFormat {
 // connector-owned snapshot of the submitted message and may be nil only when a
 // malformed runtime frame could not supply one.
 type Deadletter struct {
-	OriginalEnvelope *Envelope        `json:"original_envelope,omitempty"` // Immutable delivery-attempt snapshot.
-	Reason           DeadletterReason `json:"reason,omitempty"`            // Stable machine-readable terminal reason.
-	Detail           string           `json:"detail,omitempty"`            // Human-readable diagnostic detail; do not branch on it.
-	ActiveGeneration uint64           `json:"active_generation,omitempty"` // Route generation active when delivery terminated.
-	ResolvedHost     string           `json:"resolved_host,omitempty"`     // Selected host when resolution progressed that far.
-	ResolvedPort     uint32           `json:"resolved_port,omitempty"`     // Selected port when resolution progressed that far.
+	OriginalEnvelope     *Envelope               `json:"original_envelope,omitempty"` // Immutable delivery-attempt snapshot.
+	Reason               DeadletterReason        `json:"reason,omitempty"`            // Stable machine-readable terminal reason.
+	Detail               string                  `json:"detail,omitempty"`            // Human-readable diagnostic detail; do not branch on it.
+	ActiveGeneration     uint64                  `json:"active_generation,omitempty"` // Route generation active when delivery terminated.
+	ResolvedHost         string                  `json:"resolved_host,omitempty"`     // Selected host when resolution progressed that far.
+	ResolvedPort         uint32                  `json:"resolved_port,omitempty"`     // Selected port when resolution progressed that far.
+	EndpointAttemptCount uint32                  `json:"endpoint_attempt_count,omitempty"`
+	NativeFailure        *RuntimeFailureSnapshot `json:"native_failure,omitempty"`
+	FailureDetails       map[string]string       `json:"failure_details,omitempty"`
+}
+
+// RuntimeFailureSnapshot projects Core's numeric delivery-cause dimensions.
+// Zero is unknown. Raw details are diagnostic data, never a classification input.
+type RuntimeFailureSnapshot struct {
+	Domain    uint32 `json:"domain"`
+	Phase     uint32 `json:"phase"`
+	Code      uint32 `json:"code"`
+	Certainty uint32 `json:"certainty"`
+	Scope     uint32 `json:"scope"`
 }
 
 func (d *Deadletter) GetOriginalEnvelope() *Envelope {
@@ -422,16 +435,6 @@ func LocalRouteDefault(target string) RouteSpec {
 	return LocalRoute(target, 0)
 }
 
-func (r RouteSpec) RequireValid() error {
-	if strings.TrimSpace(r.Target) == "" {
-		return fmt.Errorf("route requires target")
-	}
-	if len(r.Endpoints) == 0 {
-		return fmt.Errorf("route target=%s requires at least one endpoint", r.Target)
-	}
-	return nil
-}
-
 type RuntimeOverloadPolicy struct {
 	IngressMode                     OverloadMode
 	LocalDeliveryMode               OverloadMode
@@ -464,9 +467,6 @@ func OutboundOnlyNetwork() RuntimeNetworkConfig {
 }
 
 func NetworkNode(bindHost string, bindPort uint16, advertiseHost string, advertisePort uint16) RuntimeNetworkConfig {
-	if advertisePort == 0 {
-		advertisePort = bindPort
-	}
 	return RuntimeNetworkConfig{
 		Mode:          RuntimeNetworkNode,
 		BindHost:      bindHost,
@@ -476,145 +476,77 @@ func NetworkNode(bindHost string, bindPort uint16, advertiseHost string, adverti
 	}
 }
 
-func (n RuntimeNetworkConfig) Normalized() RuntimeNetworkConfig {
-	if n.Mode == 0 {
-		return EmbeddedNetwork()
-	}
-	return n
-}
-
+// RequireValid checks the C-string representation only; Core owns policy admission.
 func (n RuntimeNetworkConfig) RequireValid() error {
-	n = n.Normalized()
-	if n.Mode == RuntimeNetworkNode {
-		if strings.TrimSpace(n.BindHost) == "" || n.BindPort == 0 {
-			return fmt.Errorf("network node requires bind host and port")
-		}
-		if strings.TrimSpace(n.AdvertiseHost) == "" || n.AdvertisePort == 0 {
-			return fmt.Errorf("network node requires advertise host and port")
-		}
-		switch n.AdvertiseHost {
-		case "0.0.0.0", "::", "[::]", "::0":
-			return fmt.Errorf("network node advertise host must not be wildcard")
-		}
-		return nil
-	}
-	if n.Mode != RuntimeNetworkEmbedded && n.Mode != RuntimeNetworkOutboundOnly {
-		return fmt.Errorf("unknown runtime network mode: %d", n.Mode)
-	}
-	if n.BindHost != "" || n.BindPort != 0 || n.AdvertiseHost != "" || n.AdvertisePort != 0 {
-		return fmt.Errorf("runtime network mode %d does not accept or advertise a listener", n.Mode)
-	}
-	return nil
+	return validateNativeText([2]string{"network.BindHost", n.BindHost}, [2]string{"network.AdvertiseHost", n.AdvertiseHost})
 }
 
-func (p RuntimeOverloadPolicy) RequireValid() error {
-	if p.IngressMode != OverloadModeReject {
-		return fmt.Errorf("overload policy ingress mode currently supports only reject")
-	}
-	if p.LocalDeliveryMode != OverloadModeReject {
-		return fmt.Errorf("overload policy local delivery mode currently supports only reject")
-	}
-	return nil
+// RuntimeMonitorOptions is construction-only collection intent. A nil group
+// selects Core's default; Enabled:false remains explicitly configured.
+type RuntimeMonitorOptions struct {
+	Enabled bool
 }
 
 type ConnectorConfig struct {
-	SystemName                   string
-	NodeID                       string
-	Routes                       []RouteSpec
-	StrictNoDrop                 bool
-	QueueCapacity                int
-	EnableMonitor                bool
-	SeparateDeliveredRequestLane bool
-	Generation                   uint64
-	OverloadPolicy               *RuntimeOverloadPolicy
-	ConnectionStrategy           *RuntimeTCPConnectionStrategySpec
-	Security                     *RuntimeTCPSecuritySpec
-	Network                      RuntimeNetworkConfig
+	SystemName         string
+	NodeID             string
+	Routes             []RouteSpec
+	StrictNoDrop       bool
+	QueueCapacity      int
+	Monitor            *RuntimeMonitorOptions
+	Generation         uint64
+	OverloadPolicy     *RuntimeOverloadPolicy
+	ConnectionStrategy *RuntimeTCPConnectionStrategySpec
+	Security           *RuntimeTCPSecuritySpec
+	Network            RuntimeNetworkConfig
 }
 
+// RequireValid checks only the language/native representation boundary.
 func (c ConnectorConfig) RequireValid() error {
-	if strings.TrimSpace(c.SystemName) == "" {
-		return fmt.Errorf("connector config requires systemName")
+	if int64(c.QueueCapacity) < -2147483648 || int64(c.QueueCapacity) > 2147483647 {
+		return fmt.Errorf("queue capacity cannot cross the C int32 boundary")
 	}
-	if strings.TrimSpace(c.NodeID) == "" {
-		return fmt.Errorf("connector config requires nodeId")
-	}
-	if c.QueueCapacity < 1 {
-		return fmt.Errorf("connector config requires queueCapacity >= 1")
-	}
-	if c.Generation < 1 {
-		return fmt.Errorf("connector config requires generation >= 1")
-	}
-	if c.OverloadPolicy != nil {
-		if err := c.OverloadPolicy.RequireValid(); err != nil {
-			return err
-		}
-	}
-	if err := c.Network.RequireValid(); err != nil {
+	if err := validateNativeText([2]string{"config.SystemName", c.SystemName}, [2]string{"config.NodeID", c.NodeID}); err != nil {
 		return err
 	}
-	if len(c.Routes) == 0 {
-		return fmt.Errorf("connector config requires at least one route")
-	}
-	for _, route := range c.Routes {
-		if err := route.RequireValid(); err != nil {
-			return err
-		}
-	}
-	return nil
+	return c.Network.RequireValid()
 }
 
 type ConnectorStartSpec struct {
-	SystemName                          string
-	NodeID                              string
-	Routes                              []RouteSpec
-	StrictNoDrop                        bool
-	QueueCapacity                       int
-	EnableMonitor                       bool
-	SeparateDeliveredRequestLane        bool
-	DisableSeparateDeliveredRequestLane bool
-	Generation                          uint64
-	OverloadPolicy                      *RuntimeOverloadPolicy
-	ConnectionStrategy                  *RuntimeTCPConnectionStrategySpec
-	Security                            *RuntimeTCPSecuritySpec
-	Network                             RuntimeNetworkConfig
+	SystemName         string
+	NodeID             string
+	Routes             []RouteSpec
+	StrictNoDrop       bool
+	QueueCapacity      int
+	Monitor            *RuntimeMonitorOptions
+	Generation         uint64
+	OverloadPolicy     *RuntimeOverloadPolicy
+	ConnectionStrategy *RuntimeTCPConnectionStrategySpec
+	Security           *RuntimeTCPSecuritySpec
+	Network            RuntimeNetworkConfig
 }
 
 func (s ConnectorStartSpec) ToConnectorConfig() ConnectorConfig {
 	normalized := s.Normalized()
 	return ConnectorConfig{
-		SystemName:                   normalized.SystemName,
-		NodeID:                       normalized.NodeID,
-		Routes:                       normalized.Routes,
-		StrictNoDrop:                 normalized.StrictNoDrop,
-		QueueCapacity:                normalized.QueueCapacity,
-		EnableMonitor:                normalized.EnableMonitor,
-		SeparateDeliveredRequestLane: normalized.SeparateDeliveredRequestLane,
-		Generation:                   normalized.Generation,
-		OverloadPolicy:               normalized.OverloadPolicy,
-		ConnectionStrategy:           normalized.ConnectionStrategy,
-		Security:                     normalized.Security,
-		Network:                      normalized.Network,
+		SystemName:         normalized.SystemName,
+		NodeID:             normalized.NodeID,
+		Routes:             normalized.Routes,
+		StrictNoDrop:       normalized.StrictNoDrop,
+		QueueCapacity:      normalized.QueueCapacity,
+		Monitor:            normalized.Monitor,
+		Generation:         normalized.Generation,
+		OverloadPolicy:     normalized.OverloadPolicy,
+		ConnectionStrategy: normalized.ConnectionStrategy,
+		Security:           normalized.Security,
+		Network:            normalized.Network,
 	}
 }
 
 func (s ConnectorStartSpec) Normalized() ConnectorStartSpec {
 	out := s
-	if out.QueueCapacity == 0 {
-		out.QueueCapacity = 128
-	}
 	if out.Generation == 0 {
 		out.Generation = 1
-	}
-	out.Network = out.Network.Normalized()
-	if !out.EnableMonitor {
-		out.EnableMonitor = true
-	}
-	if !out.DisableSeparateDeliveredRequestLane {
-		out.SeparateDeliveredRequestLane = true
-	}
-	if !out.StrictNoDrop {
-		out.StrictNoDrop = true
 	}
 	return out
 }
@@ -623,10 +555,9 @@ func (s ConnectorStartSpec) RequireValid() error {
 	return s.ToConnectorConfig().RequireValid()
 }
 
-type SubmittedRequest struct {
-	MessageID     string
-	CorrelationID string
-}
+// SubmittedRequest acknowledges the caller's message identity. Effective
+// terminal correlation is projected from Core's completed ticket, not input.
+type SubmittedRequest struct{ MessageID string }
 
 type RequestTerminalEventKind string
 

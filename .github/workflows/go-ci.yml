@@ -60,17 +60,19 @@ jobs:
           raise SystemExit(1 if failed else 0)
           PY
 
+      - name: Check exact package inventory
+        run: sha256sum --check SHA256SUMS
+
       - name: Check native payload
         run: |
-          native_count="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) | wc -l | tr -d ' ')"
-          test "${native_count}" = "5"
+          python3 - <<'CHECK'
+          from pathlib import Path
+          import hashlib
+          expected = {'native/macos-aarch64/libcoakka_runtime_v2.dylib': '5ef45ad964a43c3e91c6c69bd731dbc5ac30348721ebffa7d384a7ce05bc4dd2', 'native/linux-x86_64/libcoakka_runtime_v2.so': '4736f09d4a68073c6b9f7043f6418ab5a316ee0ec06a11b92510c65c1247ba81', 'native/linux-aarch64/libcoakka_runtime_v2.so': '9092c59320f2aa8d3431e01ac10f292c82b545c23d74f51dcde4855741966de8', 'native/windows-aarch64/libcoakka_runtime_v2.dll': '720a73215b4cbee231cbaadb766704d60ff999b11d52411819484e738f91bacd', 'native/windows-x86_64/libcoakka_runtime_v2.dll': 'dba531e09359f270a22543ec3b1a4a4bf9750e965c2b5920966871faaff88e4d'}
+          actual = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+                    for p in Path("native").rglob("*") if p.is_file()}
+          assert actual == expected, "native inventory or identity changed"
+          CHECK
 
-          unexpected_aliases="$(find native -type f \( \
-            -name 'libcoakka_runtime_v2.so' -o \
-            -name 'libcoakka_runtime_v2.dylib' -o \
-            -name 'libcoakka_runtime_v2.dll' \
-          \) -print)"
-          test -z "${unexpected_aliases}"
-
-          unpinned="$(find native -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) -print | grep -Ev '/libcoakka_runtime_v2-[0-9]+\.[0-9]+\.[0-9]+\+[^/]+\.(so|dylib|dll)$' || true)"
-          test -z "${unpinned}"
+      - name: Run ordinary default-path application
+        run: go run -trimpath ./examples/first-run

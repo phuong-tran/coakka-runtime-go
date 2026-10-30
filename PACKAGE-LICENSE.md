@@ -28,4 +28,4 @@ substantially equivalent infrastructure service.
 It does not replace either license.
 
 Public guidance and stable links are available in the
-[CoAkka package licensing guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/package-licensing.md).
+[CoAkka package licensing guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/package-licensing.md).

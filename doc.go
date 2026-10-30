@@ -8,9 +8,9 @@
 // contract applies to standalone hosts, containers, VMs, bare metal, and
 // architecture-matched edge deployments.
 //
-// Install the public module with:
+// After its authorized publication, install this API baseline with:
 //
-//	go get github.com/phuong-tran/coakka-runtime-go@v1.8.3
+//	go get github.com/phuong-tran/coakka-runtime-go/v3@v3.0.0
 //
 // CoAkka is a native-backed runtime and logger toolkit for application-owned
 // work. It lets an app route work by target name, handle request/reply,
