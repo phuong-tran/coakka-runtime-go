@@ -1,26 +1,18 @@
-# Go v3 package release controls
+# Verifying Go connector 3.2.1
 
-Candidate: module github.com/phuong-tran/coakka-runtime-go/v3, tag v3.2.1,
-native Core 3.2/f9e5a632d/ABI1. Public v1.8.3 remains immutable.
+The tag `v3.2.1` identifies `github.com/phuong-tran/coakka-runtime-go/v3`
+with bundled Core 3.2, build `f9e5a632d2d046a5b4e89d5ce0c9042aee5c7b45`,
+ABI 1. Go verifies the module with its checksum database.
 
-The cold producer admits the exact P489 SDK manifest, all25 public headers and
-five native images, then creates a fresh deterministic source module. Its
-private receipt stays outside the consumer module. Reject wrong versions,
-module paths, SDK/source/native identities, missing/extra files and existing
-outputs. Do not rebuild Core or download an older native payload.
+```sh
+go mod download -json github.com/phuong-tran/coakka-runtime-go/v3@v3.2.1
+```
 
-Before technical closeout require strict source/test/vet, scoped C analysis,
-race/native diagnostics, bounded fuzz, failure/pressure/resource protocols,
-real shrink plus installed consumers, matching targets and declared minimum
-profiles. Verify architecture, public/native exports, dependency closure,
-legal material, exact native bytes and absence of private paths/debug/inventory.
-Renew canonical guides, samples and catalogs with the exact artifact identity.
+From the tagged checkout, or from the extracted release archive, verify
+the package inventory with `sha256sum -c SHA256SUMS` (or
+`shasum -a 256 -c SHA256SUMS` on macOS). The GitHub release also supplies
+a SHA-256 file for the attached archive.
 
-Packaging does not authorize a source push or module tag. At a later release
-command, verify the independent candidate seal, prepare the reviewed public
-source commit and v3 tag, verify anonymous module/proxy identity, and run fresh
-proxy-installed consumers before changing public selectors. Never overwrite an
-existing module coordinate or substitute a rebuild for frozen artifacts.
-
-No source push, main merge, tag, registry/proxy publication or support expansion
-occurs during private qualification. Publisher signing is absent.
+See the [consumer guide](CONSUMING.md) for prerequisites and the
+[package ledger](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/current-packages.md)
+for the current release.

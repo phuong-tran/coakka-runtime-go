@@ -1,8 +1,13 @@
-# Consuming the Go v2 package
+# Consuming CoAkka Runtime Go 3.2.1
 
-Use exactly github.com/phuong-tran/coakka-runtime-go/v3 at v3.2.1. Check [Current Packages](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/current-packages.md) for availability.
-only candidate source; use a standard Go module replacement. The module path,
-semantic major, package source and bundled native generation must agree.
+Install the module from your application directory:
+
+```sh
+go get github.com/phuong-tran/coakka-runtime-go/v3@v3.2.1
+```
+
+Import `github.com/phuong-tran/coakka-runtime-go/v3`. Core 3.2 is included in
+the module and does not need a separate install.
 
 Build with CGO_ENABLED=1 and a C11 compiler. The four non-Windows-ARM profiles
 use Go1.22.12 as the compatibility floor; native Windows ARM64 uses Go1.25.5
@@ -13,7 +18,7 @@ installed application dependencies.
 One exact Core 3.2/f9e5a632d image is embedded for the selected GOOS/GOARCH.
 The five target closures are macOS ARM64, Linux ARM64/x64 and Windows ARM64/x64.
 Source presence or cross-compilation cannot establish another target's runtime
-support. Keep the selected candidate's platform and minimum-OS evidence.
+support. See the [platform evidence](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/reference/runtime-package-platform-evidence.md) for the qualified targets.
 
 Run the compiled app away from the module/build tree, without native-path
 overrides. The loader owns image extraction, integrity and its digest-addressed
@@ -35,4 +40,5 @@ The qualification additionally exercises a real Go shrink/obfuscation tool and
 keeps its maps privately. A passing stripped build alone is not proof of
 obfuscation or whole-process leak absence.
 
-See README.md for migration from v1 and RELEASE.md for exact candidate gates.
+See the [README](README.md) for migration from v1 and [RELEASE.md](RELEASE.md)
+for package verification.
