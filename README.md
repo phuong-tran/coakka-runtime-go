@@ -30,7 +30,7 @@ Windows x64. Native Windows ARM64 uses its separately qualified Go1.25.5/cgo
 profile. A build on another architecture does not prove execution there.
 The selected native images target macOS13 ARM64, Linux ARM64 glibc2.35,
 Linux x64 glibc2.36, Windows x64 and Windows11 ARM64; exact matching execution
-and minimum-OS results belong to the candidate's qualification record.
+and minimum-OS results are recorded in the package qualification record.
 
 ## Application shape
 
