@@ -1,7 +1,6 @@
 # Consuming the Go v2 package
 
-Use exactly github.com/phuong-tran/coakka-runtime-go/v3 at v3.2.1 after its
-authorized publication. Before publication, an admitted local module is the
+Use exactly github.com/phuong-tran/coakka-runtime-go/v3 at v3.2.1. Check [Current Packages](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/current-packages.md) for availability.
 only candidate source; use a standard Go module replacement. The module path,
 semantic major, package source and bundled native generation must agree.
 

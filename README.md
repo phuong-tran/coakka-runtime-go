@@ -4,8 +4,8 @@ The Go connector embeds CoAkka Runtime in a Go application. It shares Core's
 runtime, request/reply, deadletter, File and Stream contracts with the other
 CoAkka connectors.
 
-This branch prepares module `github.com/phuong-tran/coakka-runtime-go/v3`,
-version `v3.2.1`, over native Core 3.2/f9e5a632d/ABI1. It retains the public 3.0.0 API. Publication requires a separate release command.
+This connector uses module `github.com/phuong-tran/coakka-runtime-go/v3`,
+version `v3.2.1`, over native Core 3.2/f9e5a632d/ABI1. It retains the public 3.0.0 API.
 
 ## Module and build requirements
 
@@ -16,13 +16,13 @@ required at build time; the resulting app contains the selected native image.
 For the public File Lane API and delivery contract, see the
 [file transfer guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md).
 
-After publication:
+For registry availability, see [Current Packages](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/current-packages.md). Install this version with:
 
 ```sh
 go get github.com/phuong-tran/coakka-runtime-go/v3@v3.2.1
 ```
 
-Before publication, use the exact admitted local module with an ordinary
+For local qualification, use the exact selected module with an ordinary
 `replace` directive. Do not fetch the older public module as a fallback.
 
 The compatibility floor is Go1.22.12 for macOS ARM64, Linux ARM64/x64 and
