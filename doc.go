@@ -10,7 +10,7 @@
 //
 // After its authorized publication, install this API baseline with:
 //
-//	go get github.com/phuong-tran/coakka-runtime-go/v3@v3.0.0
+//	go get github.com/phuong-tran/coakka-runtime-go/v3@v3.2.1
 //
 // CoAkka is a native-backed runtime and logger toolkit for application-owned
 // work. It lets an app route work by target name, handle request/reply,

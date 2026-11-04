@@ -10,6 +10,6 @@ var packagedRuntimeImage string
 
 func init() {
 	bundledRuntimeAsset = runtimeAsset{
-		image: packagedRuntimeImage, sha256: "5ef45ad964a43c3e91c6c69bd731dbc5ac30348721ebffa7d384a7ce05bc4dd2", name: "libcoakka_runtime_v2.dylib",
+		image: packagedRuntimeImage, sha256: "c05e2be0be725e0868e7ebf7387319b040da84794d22b6c1d50e506164dadbfa", name: "libcoakka_runtime_v2.dylib",
 	}
 }

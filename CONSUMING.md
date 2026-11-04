@@ -1,6 +1,6 @@
-# Consuming the Go 3.0.0 package
+# Consuming the Go v2 package
 
-Use exactly github.com/phuong-tran/coakka-runtime-go/v3 at v3.0.0 after its
+Use exactly github.com/phuong-tran/coakka-runtime-go/v3 at v3.2.1 after its
 authorized publication. Before publication, an admitted local module is the
 only candidate source; use a standard Go module replacement. The module path,
 semantic major, package source and bundled native generation must agree.
@@ -11,7 +11,7 @@ with its matching ARM64 C compiler. Go packages have no external module
 dependencies. Toolchains and optional packaging helpers are build tools, not
 installed application dependencies.
 
-One exact Core3.0.0/1522b4a9 image is embedded for the selected GOOS/GOARCH.
+One exact Core 3.2/f9e5a632d image is embedded for the selected GOOS/GOARCH.
 The five target closures are macOS ARM64, Linux ARM64/x64 and Windows ARM64/x64.
 Source presence or cross-compilation cannot establish another target's runtime
 support. Keep the selected candidate's platform and minimum-OS evidence.

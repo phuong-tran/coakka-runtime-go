@@ -1,29 +1,29 @@
-# CoAkka Runtime Go 3.0.0
+# CoAkka Runtime Go 3.2.1
 
-CoAkka Runtime is a polyglot, cross-platform distributed runtime for
-application-owned work, backed by a shared native core. This Go connector
-brings the same request/reply, deadletter, File and Stream contract to Go
-applications while business handlers remain application-owned.
+The Go connector embeds CoAkka Runtime in a Go application. It shares Core's
+runtime, request/reply, deadletter, File and Stream contracts with the other
+CoAkka connectors.
 
-This package uses module `github.com/phuong-tran/coakka-runtime-go/v3`,
-version `v3.0.0`, over native Core3.0.0/1522b4a9/ABI1. It is a new API baseline
-after public v1.8.3. See the [current package ledger](https://github.com/phuong-tran/coakka-samples/blob/main/docs/common/current-packages.md) for registry/tag availability.
+This branch prepares module `github.com/phuong-tran/coakka-runtime-go/v3`,
+version `v3.2.1`, over native Core 3.2/f9e5a632d/ABI1. It retains the public 3.0.0 API. Publication requires a separate release command.
 
 ## Module and build requirements
 
-Use the /v3 import path. The v3.0.0 tag must belong to this module path.
+Use the /v3 import path. The v3.2.1 tag must belong to this module path.
 There are no external Go module dependencies. A working C11 cgo compiler is
 required at build time; the resulting app contains the selected native image.
 
-Install the matching module version:
+For the public File Lane API and delivery contract, see the
+[file transfer guide](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md).
+
+After publication:
 
 ```sh
-go get github.com/phuong-tran/coakka-runtime-go/v3@v3.0.0
+go get github.com/phuong-tran/coakka-runtime-go/v3@v3.2.1
 ```
 
-For controlled pre-release qualification only, use an admitted local module
-with a standard `replace` directive. Normal installed applications use the
-public version above without replacements or native-path overrides.
+Before publication, use the exact admitted local module with an ordinary
+`replace` directive. Do not fetch the older public module as a fallback.
 
 The compatibility floor is Go1.22.12 for macOS ARM64, Linux ARM64/x64 and
 Windows x64. Native Windows ARM64 uses its separately qualified Go1.25.5/cgo
@@ -31,17 +31,6 @@ profile. A build on another architecture does not prove execution there.
 The selected native images target macOS13 ARM64, Linux ARM64 glibc2.35,
 Linux x64 glibc2.36, Windows x64 and Windows11 ARM64; exact matching execution
 and minimum-OS results belong to the candidate's qualification record.
-
-## First run
-
-From this repository checkout, run the ordinary app:
-
-```sh
-go run ./examples/first-run
-```
-
-Expected output: `accepted-hello`. The example starts one host, handles one
-request and preserves both operation and close failures.
 
 ## Application shape
 
@@ -95,6 +84,3 @@ owns cross-language concepts and lifecycle guidance.
 Managed connector source uses Apache2.0. Native images use the file-scoped
 CoAkka Native Artifact License1.2. Retain the supplied LICENSE, NOTICE,
 NATIVE-LICENSE.md and PACKAGE-LICENSE.md. Publisher signing is currently absent.
-
-[File transfer](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/guides/runtime-file-transfer.md) and
-[Monitoring and defaults](https://github.com/phuong-tran/coakka-samples/blob/main/docs/coakka-runtime/operations/runtime-monitoring.md).
